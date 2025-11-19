@@ -35,11 +35,12 @@ const createPlayer = (
       clutch: getStat(),
     },
     marketValue: Math.max(500, Math.floor(adjustedValue)),
-    salary: Math.max(100, Math.floor(rating * 20 * valueMultiplier))
+    salary: Math.max(100, Math.floor(rating * 20 * valueMultiplier)),
+    morale: 75 + Math.floor(Math.random() * 15) // Default morale 75-90
   };
 };
 
-const generateRoster = (countryCode: string, avgRating: number, multiplier: number): Player[] => {
+export const generateRoster = (countryCode: string, avgRating: number, multiplier: number): Player[] => {
   const roles = [PlayerRole.IGL, PlayerRole.AWPER, PlayerRole.ENTRY, PlayerRole.SUPPORT, PlayerRole.LURKER];
   const generatedNames = [
     'Slayer', 'Phantom', 'K1ng', 'Joker', 'Ghost', 'Viper', 'Neo', 'Dash', 'Blaze', 'Frost',

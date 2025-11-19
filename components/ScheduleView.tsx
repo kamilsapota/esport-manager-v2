@@ -18,9 +18,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ tournaments, current
   const formatMoney = (amount: number) => `$${amount.toLocaleString()}`;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h2 className="text-3xl font-bold text-white mb-2">Tournament Schedule</h2>
-      <p className="text-gray-400 mb-8">Compete in qualifiers to earn your spot in major events.</p>
+    <div className="p-6 w-full max-w-5xl mx-auto">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl font-bold text-white mb-2">Tournament Schedule</h2>
+        <p className="text-gray-400">Compete in qualifiers to earn your spot in major events.</p>
+      </div>
 
       <div className="space-y-4">
         {tournaments.map((t) => {

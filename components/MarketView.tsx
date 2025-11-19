@@ -43,7 +43,7 @@ export const MarketView: React.FC<MarketViewProps> = ({ budget, onHire, currentR
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 w-full max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <div>
             <h2 className="text-3xl font-bold text-white">Transfer Market</h2>
@@ -66,13 +66,13 @@ export const MarketView: React.FC<MarketViewProps> = ({ budget, onHire, currentR
       )}
 
       {isLoading && agents.length === 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {[1,2,3,4].map(i => (
                 <div key={i} className="h-64 bg-gray-800 rounded-lg animate-pulse"></div>
             ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {agents.map(player => (
                 <PlayerCard 
                     key={player.id} 
@@ -80,6 +80,7 @@ export const MarketView: React.FC<MarketViewProps> = ({ budget, onHire, currentR
                     actionLabel={currentRosterCount >= 5 ? "Roster Full" : `Sign for $${player.marketValue.toLocaleString()}`}
                     onAction={handleHire}
                     actionDisabled={budget < player.marketValue || currentRosterCount >= 5}
+                    className="h-full"
                 />
             ))}
         </div>

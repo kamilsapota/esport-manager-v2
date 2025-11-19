@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { MatchResult, MatchLog, Team, PlayerMatchStats } from '../types';
 import { Trophy, XCircle } from 'lucide-react';
+import { CountryFlag } from './CountryFlag';
 
 interface MatchViewProps {
   matchResult: MatchResult | null;
@@ -39,7 +40,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ matchResult, playerTeam, o
   const isWin = matchResult.finalScoreUs > matchResult.finalScoreEnemy;
 
   // Helper for Scoreboard Rows
-  const StatRow = ({ stats, isMvp }: { stats: PlayerMatchStats, isMvp: boolean }) => {
+  const StatRow: React.FC<{ stats: PlayerMatchStats, isMvp: boolean }> = ({ stats, isMvp }) => {
     const kdDiff = stats.kills - stats.deaths;
     const diffColor = kdDiff > 0 ? 'text-green-400' : kdDiff < 0 ? 'text-red-400' : 'text-gray-400';
     const diffSign = kdDiff > 0 ? '+' : '';
@@ -52,9 +53,10 @@ export const MatchView: React.FC<MatchViewProps> = ({ matchResult, playerTeam, o
     return (
       <tr className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors text-sm">
         <td className="py-2 px-3">
-          <div className="flex items-center gap-2">
-             {/* Minimal flag placeholder using text code if no image */}
-             <span className="text-xs font-mono text-gray-500 w-6 text-center bg-black/30 rounded">{stats.country}</span>
+          <div className="flex items-center gap-3">
+             <div className="w-5 flex justify-center">
+                <CountryFlag countryCode={stats.country} />
+             </div>
              <span className={`font-medium ${isMvp ? 'text-yellow-500' : 'text-gray-200'}`}>
                 {stats.alias}
                 {isMvp && <Trophy size={12} className="inline ml-1" />}
@@ -80,7 +82,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ matchResult, playerTeam, o
     );
   };
 
-  const TeamTable = ({ teamName, stats, isUserTeam }: { teamName: string, stats: PlayerMatchStats[], isUserTeam: boolean }) => (
+  const TeamTable: React.FC<{ teamName: string, stats: PlayerMatchStats[], isUserTeam: boolean }> = ({ teamName, stats, isUserTeam }) => (
      <div className="mb-6">
         <div className={`flex items-center gap-2 mb-2 px-1 ${isUserTeam ? 'text-ct-blue' : 'text-t-red'}`}>
             <h3 className="font-bold uppercase tracking-widest text-lg">{teamName}</h3>

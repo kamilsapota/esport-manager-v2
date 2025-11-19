@@ -1,4 +1,5 @@
 
+
 export enum PlayerRole {
   IGL = 'IGL',
   AWPER = 'AWPer',
@@ -34,6 +35,7 @@ export interface Player {
   stats: PlayerStats;
   marketValue: number;
   salary: number;
+  morale: number; // 0-100
   avatarSeed?: string;
 }
 
@@ -97,6 +99,16 @@ export interface LeagueRoundResult {
     scoreA: number;
     scoreB: number;
     winner: string;
+}
+
+export interface OpponentAnalysis {
+  overview: string;
+  keyPlayer: string;
+  keyPlayerReason: string;
+  strengths: string[];
+  weaknesses: string[];
+  strategy: string;
+  winProbability: number;
 }
 
 export enum GameView {

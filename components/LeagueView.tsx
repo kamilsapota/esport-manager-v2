@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Team, LeagueRoundResult } from '../types';
 import { Shield, Calendar, Check, X } from 'lucide-react';
@@ -21,7 +20,7 @@ export const LeagueView: React.FC<LeagueViewProps> = ({ myTeam, opponents, round
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-6 w-full max-w-7xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
           <div className="p-3 bg-cs-blue rounded-lg text-white">
               <Shield size={32} />
