@@ -27,7 +27,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, actionLabel, onA
   const StatBar = ({ label, value, icon: Icon }: { label: string, value: number, icon: any }) => (
     <div className="flex items-center gap-2 mb-1">
       <Icon size={12} className="text-gray-500" />
-      <div className="text-xs text-gray-400 w-16">{label}</div>
+      <div className="text-xs text-gray-400 w-14">{label}</div>
       <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
         <div 
           className={`h-full rounded-full ${value > 85 ? 'bg-yellow-500' : value > 70 ? 'bg-green-500' : 'bg-gray-600'}`} 
@@ -38,7 +38,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, actionLabel, onA
     </div>
   );
 
-  const MoraleBar = ({ value }: { value: number }) => {
+  const MentalBar = ({ value }: { value: number }) => {
       let color = 'bg-red-500';
       if (value > 80) color = 'bg-green-400';
       else if (value > 50) color = 'bg-yellow-500';
@@ -47,7 +47,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, actionLabel, onA
       return (
         <div className="flex items-center gap-2 mb-1">
             <Smile size={12} className="text-gray-500" />
-            <div className="text-xs text-gray-400 w-16">MORALE</div>
+            <div className="text-xs text-gray-400 w-14">MENTAL</div>
             <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
                 <div 
                 className={`h-full rounded-full ${color} transition-all duration-500`} 
@@ -87,15 +87,16 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, actionLabel, onA
         <StatBar label="AIM" value={player.stats.aim} icon={Crosshair} />
         <StatBar label="RFLX" value={player.stats.reflex} icon={Zap} />
         <StatBar label="STRAT" value={player.stats.strategy} icon={Brain} />
+        <StatBar label="CLUTCH" value={player.stats.clutch} icon={Activity} />
+        
+        {/* Show UTIL only if NOT compact, or if compact but there's space (rare) */}
         {!isCompact && (
-            <>
-                <StatBar label="UTIL" value={player.stats.utility} icon={Shield} />
-                <StatBar label="CLUTCH" value={player.stats.clutch} icon={Activity} />
-            </>
+            <StatBar label="UTIL" value={player.stats.utility} icon={Shield} />
         )}
-        {/* Morale Indicator */}
+        
+        {/* Mental/Morale Indicator */}
         <div className="mt-2 pt-2 border-t border-gray-800/50">
-            <MoraleBar value={player.morale ?? 50} />
+            <MentalBar value={player.morale ?? 50} />
         </div>
       </div>
 

@@ -25,6 +25,12 @@ export interface PlayerStats {
   clutch: number;
 }
 
+export interface PlayerPerformance {
+    kills: number;
+    deaths: number;
+    rating: number;
+}
+
 export interface Player {
   id: string;
   alias: string;
@@ -37,6 +43,7 @@ export interface Player {
   salary: number;
   morale: number; // 0-100
   avatarSeed?: string;
+  matchHistory: PlayerPerformance[]; // Track performance over time
 }
 
 export interface Team {
@@ -109,6 +116,15 @@ export interface OpponentAnalysis {
   weaknesses: string[];
   strategy: string;
   winProbability: number;
+}
+
+export interface ScheduledMatch {
+    id: string;
+    date: string; // ISO Date string
+    opponentId: string;
+    isPlayed: boolean;
+    type: 'LEAGUE' | 'TOURNAMENT' | 'PRACTICE';
+    leagueName?: string; // e.g. "ESEA Open"
 }
 
 export enum GameView {

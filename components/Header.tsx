@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Team, GameView } from '../types';
-import { DollarSign, Users, Calendar, ChevronRight } from 'lucide-react';
+import { DollarSign, Users, Calendar, ChevronRight, AlertCircle } from 'lucide-react';
 
 interface HeaderProps {
   team: Team;
@@ -9,9 +9,10 @@ interface HeaderProps {
   setView: (view: GameView) => void;
   currentDate: Date;
   onAdvanceDay: () => void;
+  isMatchDay: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ team, currentView, setView, currentDate, onAdvanceDay }) => {
+export const Header: React.FC<HeaderProps> = ({ team, currentView, setView, currentDate, onAdvanceDay, isMatchDay }) => {
   const formattedDate = currentDate.toLocaleDateString('en-US', { 
     weekday: 'short', 
     year: 'numeric', 
@@ -51,16 +52,27 @@ export const Header: React.FC<HeaderProps> = ({ team, currentView, setView, curr
 
       <div className="flex items-center gap-4 md:gap-6">
         <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-gray-300 bg-gray-800 px-3 py-1 rounded border border-gray-700 hidden sm:flex">
-                <Calendar size={14} className="text-cs-yellow" />
-                <span className="text-sm font-mono">{formattedDate}</span>
+            <div className={`flex items-center gap-2 px-3 py-1 rounded border hidden sm:flex transition-colors ${
+                isMatchDay 
+                ? 'bg-cs-yellow/20 border-cs-yellow text-cs-yellow animate-pulse' 
+                : 'bg-gray-800 border-gray-700 text-gray-300'
+            }`}>
+                {isMatchDay ? <AlertCircle size={14} /> : <Calendar size={14} className="text-cs-yellow" />}
+                <span className="text-sm font-mono font-bold">{isMatchDay ? 'MATCH DAY' : formattedDate}</span>
             </div>
+            
             <button 
                 onClick={onAdvanceDay}
-                className="p-1.5 bg-gray-800 hover:bg-gray-700 rounded text-gray-400 hover:text-white transition-colors"
-                title="Simulate Next Day"
+                disabled={isMatchDay}
+                className={`p-1.5 rounded transition-colors flex items-center gap-1 ${
+                    isMatchDay 
+                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-50' 
+                    : 'bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white'
+                }`}
+                title={isMatchDay ? "Play Match First" : "Simulate Next Day"}
             >
                 <ChevronRight size={16} />
+                {isMatchDay && <span className="text-[10px] font-bold uppercase mr-1">Locked</span>}
             </button>
         </div>
 

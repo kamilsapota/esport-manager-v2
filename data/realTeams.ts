@@ -1,3 +1,5 @@
+
+
 import { Team, Player, PlayerRole, League } from '../types';
 
 // Helper to create player with league-adjusted stats and value
@@ -36,7 +38,8 @@ const createPlayer = (
     },
     marketValue: Math.max(500, Math.floor(adjustedValue)),
     salary: Math.max(100, Math.floor(rating * 20 * valueMultiplier)),
-    morale: 75 + Math.floor(Math.random() * 15) // Default morale 75-90
+    morale: 75 + Math.floor(Math.random() * 15), // Default morale 75-90
+    matchHistory: [] // Initialize empty history
   };
 };
 
@@ -86,76 +89,79 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
   };
 };
 
-// --- 1. ESEA OPEN (20 Teams) ---
+// --- 1. ESEA OPEN (20 Teams) --- 
+// Buffed ratings by ~5-7 points to increase difficulty
 const OPEN_TEAMS: Team[] = [
-    createTeam('Zeal22', 'RO', League.OPEN, 48, 0.5),
-    createTeam('yologang420', 'PL', League.OPEN, 47, 0.5),
-    createTeam('Next In Line', 'UK', League.OPEN, 46, 0.5),
-    createTeam('born2flex', 'UA', League.OPEN, 46, 0.5),
-    createTeam('The NEXT Prodigies', 'FR', League.OPEN, 45, 0.5),
-    createTeam('QMISTRY', 'DE', League.OPEN, 45, 0.5),
-    createTeam('REDragen', 'RU', League.OPEN, 44, 0.5),
-    createTeam('kontencja', 'PL', League.OPEN, 44, 0.5),
-    createTeam('UFG', 'GE', League.OPEN, 43, 0.5),
-    createTeam('GameAgents', 'RS', League.OPEN, 43, 0.5),
-    createTeam('JetFire', 'RU', League.OPEN, 42, 0.5),
-    createTeam('ESC Gaming', 'UA', League.OPEN, 42, 0.5),
-    createTeam('niskalaukaus', 'FI', League.OPEN, 41, 0.5),
-    createTeam('normtipu', 'UA', League.OPEN, 41, 0.5),
-    createTeam('Coolermaster', 'RU', League.OPEN, 40, 0.5),
-    createTeam('VKBEST', 'RU', League.OPEN, 40, 0.5),
-    createTeam('Pirates Esports', 'UK', League.OPEN, 39, 0.5),
-    createTeam('E-Gaming', 'RU', League.OPEN, 39, 0.5),
-    createTeam('n00rg CS', 'ES', League.OPEN, 38, 0.5),
-    createTeam('Archangel5', 'RU', League.OPEN, 38, 0.5),
+    createTeam('Zeal22', 'RO', League.OPEN, 53, 0.5),
+    createTeam('yologang420', 'PL', League.OPEN, 52, 0.5),
+    createTeam('Next In Line', 'UK', League.OPEN, 51, 0.5),
+    createTeam('born2flex', 'UA', League.OPEN, 51, 0.5),
+    createTeam('The NEXT Prodigies', 'FR', League.OPEN, 50, 0.5),
+    createTeam('QMISTRY', 'DE', League.OPEN, 50, 0.5),
+    createTeam('REDragen', 'RU', League.OPEN, 49, 0.5),
+    createTeam('kontencja', 'PL', League.OPEN, 49, 0.5),
+    createTeam('UFG', 'GE', League.OPEN, 48, 0.5),
+    createTeam('GameAgents', 'RS', League.OPEN, 48, 0.5),
+    createTeam('JetFire', 'RU', League.OPEN, 47, 0.5),
+    createTeam('ESC Gaming', 'UA', League.OPEN, 47, 0.5),
+    createTeam('niskalaukaus', 'FI', League.OPEN, 46, 0.5),
+    createTeam('normtipu', 'UA', League.OPEN, 46, 0.5),
+    createTeam('Coolermaster', 'RU', League.OPEN, 45, 0.5),
+    createTeam('VKBEST', 'RU', League.OPEN, 45, 0.5),
+    createTeam('Pirates Esports', 'UK', League.OPEN, 45, 0.5),
+    createTeam('E-Gaming', 'RU', League.OPEN, 45, 0.5),
+    createTeam('n00rg CS', 'ES', League.OPEN, 44, 0.5),
+    createTeam('Archangel5', 'RU', League.OPEN, 44, 0.5),
 ];
 
 // --- 2. ESEA INTERMEDIATE (20 Teams) ---
+// Buffed ratings by ~4-6 points
 const INTERMEDIATE_TEAMS: Team[] = [
-    createTeam('this slot is for sell', 'PL', League.INTERMEDIATE, 58, 0.6),
-    createTeam('Proskilled Kingz', 'PL', League.INTERMEDIATE, 57, 0.6),
-    createTeam('Unity Esports', 'RS', League.INTERMEDIATE, 56, 0.6),
-    createTeam('kolon3', 'SE', League.INTERMEDIATE, 56, 0.6),
-    createTeam('The glecs', 'UA', League.INTERMEDIATE, 55, 0.6),
-    createTeam('eSuba', 'CZ', League.INTERMEDIATE, 55, 0.6),
-    createTeam('Sashi Academy', 'DK', League.INTERMEDIATE, 54, 0.6),
-    createTeam('SoulFrost eSports', 'DE', League.INTERMEDIATE, 53, 0.6),
-    createTeam('They sent matrix agents', 'UA', League.INTERMEDIATE, 53, 0.6),
-    createTeam('Illes Akademia', 'HU', League.INTERMEDIATE, 52, 0.6),
-    createTeam('Veldora', 'RU', League.INTERMEDIATE, 51, 0.6),
-    createTeam('ToTheBitterEnd', 'RU', League.INTERMEDIATE, 50, 0.6),
-    createTeam('Game Pulse', 'CZ', League.INTERMEDIATE, 50, 0.6),
-    createTeam('Blazing Parrots', 'PL', League.INTERMEDIATE, 49, 0.6),
-    createTeam('yengi', 'FI', League.INTERMEDIATE, 49, 0.6),
-    createTeam('Fallen_Legion', 'UA', League.INTERMEDIATE, 48, 0.6),
-    createTeam('EstViki', 'EE', League.INTERMEDIATE, 48, 0.6),
-    createTeam('TopTab Club', 'RU', League.INTERMEDIATE, 47, 0.6),
-    createTeam('nomatter-', 'UA', League.INTERMEDIATE, 47, 0.6),
-    createTeam('Whykick', 'RU', League.INTERMEDIATE, 46, 0.6),
+    createTeam('this slot is for sell', 'PL', League.INTERMEDIATE, 64, 0.6),
+    createTeam('Proskilled Kingz', 'PL', League.INTERMEDIATE, 63, 0.6),
+    createTeam('Unity Esports', 'RS', League.INTERMEDIATE, 62, 0.6),
+    createTeam('kolon3', 'SE', League.INTERMEDIATE, 62, 0.6),
+    createTeam('The glecs', 'UA', League.INTERMEDIATE, 61, 0.6),
+    createTeam('eSuba', 'CZ', League.INTERMEDIATE, 61, 0.6),
+    createTeam('Sashi Academy', 'DK', League.INTERMEDIATE, 60, 0.6),
+    createTeam('SoulFrost eSports', 'DE', League.INTERMEDIATE, 59, 0.6),
+    createTeam('They sent matrix agents', 'UA', League.INTERMEDIATE, 59, 0.6),
+    createTeam('Illes Akademia', 'HU', League.INTERMEDIATE, 58, 0.6),
+    createTeam('Veldora', 'RU', League.INTERMEDIATE, 57, 0.6),
+    createTeam('ToTheBitterEnd', 'RU', League.INTERMEDIATE, 56, 0.6),
+    createTeam('Game Pulse', 'CZ', League.INTERMEDIATE, 56, 0.6),
+    createTeam('Blazing Parrots', 'PL', League.INTERMEDIATE, 55, 0.6),
+    createTeam('yengi', 'FI', League.INTERMEDIATE, 54, 0.6),
+    createTeam('Fallen_Legion', 'UA', League.INTERMEDIATE, 54, 0.6),
+    createTeam('EstViki', 'EE', League.INTERMEDIATE, 53, 0.6),
+    createTeam('TopTab Club', 'RU', League.INTERMEDIATE, 53, 0.6),
+    createTeam('nomatter-', 'UA', League.INTERMEDIATE, 52, 0.6),
+    createTeam('Whykick', 'RU', League.INTERMEDIATE, 52, 0.6),
 ];
 
 // --- 3. ESEA MAIN (20 Teams) ---
+// Slightly Buffed
 const MAIN_TEAMS: Team[] = [
-    createTeam('HOTU eSports', 'AU', League.MAIN, 68, 0.7),
-    createTeam('Nemiga academy', 'BY', League.MAIN, 67, 0.7),
-    createTeam('The Prodigies France', 'FR', League.MAIN, 66, 0.7),
-    createTeam('Nemiga Gaming', 'BY', League.MAIN, 66, 0.7),
-    createTeam('Permitta Academy', 'PL', League.MAIN, 65, 0.7),
-    createTeam('YNT', 'RU', League.MAIN, 65, 0.7),
-    createTeam('Pepsilon', 'SE', League.MAIN, 64, 0.7),
-    createTeam('Nightmare eSports', 'RU', League.MAIN, 63, 0.7),
-    createTeam('Arctic Raptors', 'DK', League.MAIN, 62, 0.7),
-    createTeam('Chosen Few', 'TR', League.MAIN, 61, 0.7),
-    createTeam('RoundsGG', 'FI', League.MAIN, 61, 0.7),
-    createTeam('Entropy Main', 'DE', League.MAIN, 60, 0.7),
-    createTeam('FLuffyGangsters', 'RU', League.MAIN, 60, 0.7),
-    createTeam('K10', 'IE', League.MAIN, 59, 0.7),
-    createTeam('TeamOWL', 'RU', League.MAIN, 59, 0.7),
-    createTeam('AVANGAR', 'KZ', League.MAIN, 58, 0.7),
-    createTeam('Catchii', 'DK', League.MAIN, 58, 0.7),
-    createTeam('GTZ ESPORTS', 'PT', League.MAIN, 57, 0.7),
-    createTeam('kyoto', 'PL', League.MAIN, 57, 0.7),
-    createTeam('TeamOrange', 'DE', League.MAIN, 56, 0.7),
+    createTeam('HOTU eSports', 'AU', League.MAIN, 70, 0.7),
+    createTeam('Nemiga academy', 'BY', League.MAIN, 69, 0.7),
+    createTeam('The Prodigies France', 'FR', League.MAIN, 68, 0.7),
+    createTeam('Nemiga Gaming', 'BY', League.MAIN, 68, 0.7),
+    createTeam('Permitta Academy', 'PL', League.MAIN, 67, 0.7),
+    createTeam('YNT', 'RU', League.MAIN, 67, 0.7),
+    createTeam('Pepsilon', 'SE', League.MAIN, 66, 0.7),
+    createTeam('Nightmare eSports', 'RU', League.MAIN, 65, 0.7),
+    createTeam('Arctic Raptors', 'DK', League.MAIN, 64, 0.7),
+    createTeam('Chosen Few', 'TR', League.MAIN, 63, 0.7),
+    createTeam('RoundsGG', 'FI', League.MAIN, 63, 0.7),
+    createTeam('Entropy Main', 'DE', League.MAIN, 62, 0.7),
+    createTeam('FLuffyGangsters', 'RU', League.MAIN, 62, 0.7),
+    createTeam('K10', 'IE', League.MAIN, 61, 0.7),
+    createTeam('TeamOWL', 'RU', League.MAIN, 61, 0.7),
+    createTeam('AVANGAR', 'KZ', League.MAIN, 60, 0.7),
+    createTeam('Catchii', 'DK', League.MAIN, 60, 0.7),
+    createTeam('GTZ ESPORTS', 'PT', League.MAIN, 59, 0.7),
+    createTeam('kyoto', 'PL', League.MAIN, 59, 0.7),
+    createTeam('TeamOrange', 'DE', League.MAIN, 58, 0.7),
 ];
 
 // --- 4. ESEA ADVANCED (20 Teams) ---

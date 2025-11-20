@@ -1,120 +1,184 @@
+
 import React from 'react';
-import { Tournament, Team } from '../types';
-import { Trophy, Calendar, AlertCircle, CheckCircle, XCircle, Play } from 'lucide-react';
+import { Tournament, Team, ScheduledMatch } from '../types';
+import { Trophy, Calendar, Play, ChevronLeft, ChevronRight, Swords } from 'lucide-react';
 
 interface ScheduleViewProps {
   tournaments: Tournament[];
   currentDate: Date;
   team: Team;
+  schedule: ScheduledMatch[];
   onQualify: (tournamentId: string) => void;
 }
 
-export const ScheduleView: React.FC<ScheduleViewProps> = ({ tournaments, currentDate, team, onQualify }) => {
+export const ScheduleView: React.FC<ScheduleViewProps> = ({ tournaments, currentDate, team, schedule, onQualify }) => {
   
-  // Helper to check if a date is passed
-  const isPast = (dateStr: string) => new Date(dateStr) < currentDate;
+  // Calendar Logic
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
   
-  // Helper to format currency
-  const formatMoney = (amount: number) => `$${amount.toLocaleString()}`;
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+  
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanksArray = Array.from({ length: firstDay }, (_, i) => i);
+
+  const isSameDay = (d1: Date, d2: Date) => {
+      return d1.getDate() === d2.getDate() && 
+             d1.getMonth() === d2.getMonth() && 
+             d1.getFullYear() === d2.getFullYear();
+  };
+
+  const getMatchForDate = (day: number) => {
+      const checkDate = new Date(currentYear, currentMonth, day);
+      return schedule.find(m => isSameDay(new Date(m.date), checkDate));
+  };
+
+  const getTournamentForDate = (day: number) => {
+      const checkDate = new Date(currentYear, currentMonth, day);
+      return tournaments.find(t => isSameDay(new Date(t.startDate), checkDate));
+  };
 
   return (
-    <div className="p-6 w-full max-w-5xl mx-auto">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-white mb-2">Tournament Schedule</h2>
-        <p className="text-gray-400">Compete in qualifiers to earn your spot in major events.</p>
-      </div>
-
-      <div className="space-y-4">
-        {tournaments.map((t) => {
-          const tournamentDate = new Date(t.startDate);
-          const daysUntil = Math.ceil((tournamentDate.getTime() - currentDate.getTime()) / (1000 * 3600 * 24));
-          const isTournamentPast = isPast(t.startDate);
-
-          let StatusBadge;
-          let ActionButton = null;
-
-          if (t.participationStatus === 'invited') {
-            StatusBadge = (
-              <div className="flex items-center gap-1 text-yellow-400 bg-yellow-900/20 px-2 py-1 rounded border border-yellow-900/50 text-xs font-bold uppercase">
-                <Trophy size={12} /> Invited
+    <div className="p-6 w-full max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* CALENDAR SECTION */}
+          <div className="lg:col-span-2">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                        <Calendar className="text-cs-yellow" />
+                        {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h2>
+                    <p className="text-gray-400 text-sm">Current Date: <span className="text-white font-bold">{currentDate.toLocaleDateString()}</span></p>
+                </div>
+                <div className="flex gap-2">
+                    <button className="p-2 bg-gray-800 rounded text-gray-500 cursor-not-allowed"><ChevronLeft size={20} /></button>
+                    <button className="p-2 bg-gray-800 rounded text-gray-500 cursor-not-allowed"><ChevronRight size={20} /></button>
+                </div>
               </div>
-            );
-          } else if (t.participationStatus === 'qualified') {
-            StatusBadge = (
-              <div className="flex items-center gap-1 text-green-400 bg-green-900/20 px-2 py-1 rounded border border-green-900/50 text-xs font-bold uppercase">
-                <CheckCircle size={12} /> Qualified
-              </div>
-            );
-          } else if (t.participationStatus === 'eliminated') {
-            StatusBadge = (
-              <div className="flex items-center gap-1 text-red-400 bg-red-900/20 px-2 py-1 rounded border border-red-900/50 text-xs font-bold uppercase">
-                <XCircle size={12} /> Failed Qual
-              </div>
-            );
-          } else if (isTournamentPast) {
-             StatusBadge = (
-              <div className="text-gray-600 text-xs font-bold uppercase">Concluded</div>
-             );
-          } else {
-             StatusBadge = (
-                <div className="text-gray-500 text-xs font-bold uppercase">Open Qualifier</div>
-             );
-             
-             // Can only qualify if roster is full and event hasn't started
-             if (team.players.length === 5 && daysUntil > 0 && daysUntil < 60) { // Open qualifiers 2 months before
-                 ActionButton = (
-                    <button 
-                        onClick={() => onQualify(t.id)}
-                        className="flex items-center gap-2 bg-cs-blue hover:bg-blue-600 text-white text-xs font-bold uppercase px-4 py-2 rounded transition-colors"
-                    >
-                        <Play size={14} /> Play Qualifier
-                    </button>
-                 );
-             }
-          }
 
-          return (
-            <div key={t.id} className={`bg-cs-dark border ${t.participationStatus === 'invited' || t.participationStatus === 'qualified' ? 'border-cs-yellow/50' : 'border-gray-800'} rounded-lg p-5 flex flex-col md:flex-row items-center gap-6 hover:border-gray-600 transition-all relative overflow-hidden`}>
-               {/* Date Block */}
-               <div className="flex flex-col items-center justify-center bg-gray-900/50 p-3 rounded w-20 text-center border border-gray-800 shrink-0">
-                  <span className="text-xs text-gray-500 uppercase">{tournamentDate.toLocaleDateString('en-US', { month: 'short' })}</span>
-                  <span className="text-2xl font-bold text-white">{tournamentDate.getDate()}</span>
-                  <span className="text-xs text-gray-600">{tournamentDate.getFullYear()}</span>
-               </div>
-
-               {/* Info Block */}
-               <div className="flex-1 text-center md:text-left">
-                  <div className="flex items-center gap-3 justify-center md:justify-start mb-1">
-                     <h3 className="text-xl font-bold text-gray-100">{t.name}</h3>
-                     {StatusBadge}
+              <div className="bg-cs-dark border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                  {/* Days Header */}
+                  <div className="grid grid-cols-7 bg-gray-900 border-b border-gray-800">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                          <div key={d} className="py-3 text-center text-xs font-bold uppercase text-gray-500 tracking-widest">
+                              {d}
+                          </div>
+                      ))}
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-400 justify-center md:justify-start">
-                     <div className="flex items-center gap-1">
-                        <Trophy size={14} className="text-yellow-600" />
-                        <span>Prize Pool: <span className="text-white font-mono">{formatMoney(t.prizePool)}</span></span>
-                     </div>
-                     <div className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        <span>{daysUntil > 0 ? `Starts in ${daysUntil} days` : 'Event has passed'}</span>
-                     </div>
+
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 bg-gray-800/50 gap-px">
+                      {blanksArray.map(i => (
+                          <div key={`blank-${i}`} className="bg-cs-dark h-28 md:h-32"></div>
+                      ))}
+                      
+                      {daysArray.map(day => {
+                          const dateObj = new Date(currentYear, currentMonth, day);
+                          const isToday = isSameDay(dateObj, currentDate);
+                          const match = getMatchForDate(day);
+                          const tournament = getTournamentForDate(day);
+                          const isPast = dateObj < currentDate && !isToday;
+
+                          return (
+                              <div key={day} className={`bg-cs-dark h-28 md:h-32 p-2 relative transition-colors group ${isToday ? 'bg-gray-800 shadow-inner ring-1 ring-inset ring-cs-yellow/50' : 'hover:bg-gray-800'}`}>
+                                  <span className={`text-sm font-bold ${isToday ? 'text-cs-yellow' : isPast ? 'text-gray-600' : 'text-gray-300'}`}>
+                                      {day}
+                                  </span>
+                                  
+                                  {isToday && (
+                                      <span className="absolute top-2 right-2 w-2 h-2 bg-cs-yellow rounded-full animate-pulse"></span>
+                                  )}
+
+                                  <div className="mt-2 space-y-1">
+                                      {match && (
+                                          <div className={`text-[10px] p-1 rounded border truncate flex items-center gap-1 ${
+                                              match.isPlayed 
+                                                ? 'bg-gray-800 border-gray-700 text-gray-500 line-through' 
+                                                : isToday 
+                                                    ? 'bg-green-900/30 border-green-500 text-green-400 font-bold' 
+                                                    : 'bg-blue-900/20 border-blue-800 text-blue-300'
+                                          }`}>
+                                              <Swords size={10} />
+                                              {match.type === 'LEAGUE' && match.leagueName ? match.leagueName : 'Match Day'}
+                                          </div>
+                                      )}
+                                      {tournament && (
+                                          <div className="text-[10px] p-1 rounded border border-yellow-600/50 bg-yellow-900/20 text-yellow-500 truncate flex items-center gap-1">
+                                              <Trophy size={10} />
+                                              {tournament.name}
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
+                          );
+                      })}
                   </div>
-               </div>
+              </div>
+          </div>
 
-               {/* Action Block */}
-               <div>
-                  {ActionButton}
-                  {!ActionButton && team.players.length < 5 && !isTournamentPast && t.participationStatus === 'none' && (
-                      <span className="text-xs text-gray-600 italic">Full roster needed</span>
-                  )}
-               </div>
+          {/* UPCOMING EVENTS LIST */}
+          <div className="space-y-6">
+              <div className="bg-cs-dark border border-gray-800 rounded-lg p-5 shadow-lg">
+                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Trophy size={18} className="text-gray-400" /> 
+                    Major Events
+                 </h3>
+                 <div className="space-y-3">
+                    {tournaments.filter(t => new Date(t.startDate) >= currentDate).slice(0, 5).map(t => {
+                        const daysUntil = Math.ceil((new Date(t.startDate).getTime() - currentDate.getTime()) / (1000 * 3600 * 24));
+                        return (
+                            <div key={t.id} className="bg-gray-900/50 p-3 rounded border border-gray-800">
+                                <div className="text-sm font-bold text-gray-200">{t.name}</div>
+                                <div className="flex justify-between items-center mt-1">
+                                    <span className="text-xs text-gray-500">Prize: ${(t.prizePool/1000)}k</span>
+                                    <span className="text-xs font-mono text-cs-yellow">{daysUntil} days</span>
+                                </div>
+                                {team.players.length === 5 && t.participationStatus === 'none' && daysUntil > 0 && daysUntil < 60 && (
+                                     <button 
+                                        onClick={() => onQualify(t.id)}
+                                        className="w-full mt-2 py-1 bg-gray-800 hover:bg-cs-blue text-xs text-gray-300 hover:text-white rounded transition-colors uppercase font-bold"
+                                     >
+                                        Enter Qualifier
+                                     </button>
+                                )}
+                            </div>
+                        )
+                    })}
+                    {tournaments.filter(t => new Date(t.startDate) >= currentDate).length === 0 && (
+                        <div className="text-center text-gray-500 text-sm py-4">No upcoming majors this season.</div>
+                    )}
+                 </div>
+              </div>
 
-               {/* Decorative background glow for major events */}
-               {t.prizePool >= 1000000 && (
-                   <div className="absolute -right-10 -top-10 w-40 h-40 bg-yellow-500/5 rounded-full blur-3xl pointer-events-none"></div>
-               )}
-            </div>
-          );
-        })}
+              {/* Upcoming Matches List */}
+              <div className="bg-cs-dark border border-gray-800 rounded-lg p-5 shadow-lg">
+                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Calendar size={18} className="text-gray-400" /> 
+                    Next Matches
+                 </h3>
+                 <div className="space-y-3">
+                    {schedule.filter(m => !m.isPlayed).slice(0, 5).map(m => (
+                        <div key={m.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-800/50">
+                             <div className="flex flex-col">
+                                <span className="text-xs text-gray-400 font-mono">{new Date(m.date).toLocaleDateString()}</span>
+                                <span className="text-sm font-bold text-white">{m.type === 'LEAGUE' ? m.leagueName : 'Match'}</span>
+                             </div>
+                             <div className="text-[10px] uppercase font-bold bg-gray-800 text-gray-500 px-2 py-1 rounded">Pending</div>
+                        </div>
+                    ))}
+                    {schedule.filter(m => !m.isPlayed).length === 0 && (
+                        <div className="text-gray-500 text-xs italic">Season Complete.</div>
+                    )}
+                 </div>
+              </div>
+          </div>
+
       </div>
     </div>
   );
