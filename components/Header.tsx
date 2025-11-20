@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Team, GameView } from '../types';
 import { DollarSign, Users, Calendar, ChevronRight, AlertCircle } from 'lucide-react';
@@ -30,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({ team, currentView, setView, curr
           {[
             { id: GameView.DASHBOARD, label: 'DASHBOARD' },
             { id: GameView.LEAGUE, label: 'LEAGUE' },
+            { id: GameView.PRACTICE, label: 'PRACTICE' },
             { id: GameView.SCHEDULE, label: 'SCHEDULE' },
             { id: GameView.RANKINGS, label: 'RANKINGS' },
             { id: GameView.MARKET, label: 'MARKET' },

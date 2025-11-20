@@ -64,6 +64,9 @@ export interface Team {
   
   // HLTV Specifics
   rankingPoints?: number; // Global Rank Points
+  
+  // Tactics
+  mapStats?: Record<string, number>; // Map Name -> Proficiency (0-100)
 }
 
 export interface MatchLog {
@@ -134,7 +137,8 @@ export enum GameView {
   SCHEDULE = 'SCHEDULE',
   RANKINGS = 'RANKINGS',
   MATCH_LOBBY = 'MATCH_LOBBY',
-  MATCH_LIVE = 'MATCH_LIVE'
+  MATCH_LIVE = 'MATCH_LIVE',
+  PRACTICE = 'PRACTICE'
 }
 
 export type ParticipationStatus = 'invited' | 'qualified' | 'eliminated' | 'none';

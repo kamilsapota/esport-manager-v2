@@ -74,6 +74,13 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
       players = generateRoster(country, avgRating, multiplier);
   }
 
+  // Generate random proficiency for maps
+  const maps = ['Dust2', 'Mirage', 'Inferno', 'Nuke', 'Train', 'Overpass', 'Ancient'];
+  const mapStats: Record<string, number> = {};
+  maps.forEach(m => {
+      mapStats[m] = 30 + Math.floor(Math.random() * 40); // 30-70% base proficiency
+  });
+
   return {
     id: name.toLowerCase().replace(/\s/g, '-'),
     name,
@@ -85,7 +92,8 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
     matchesPlayed: 0,
     leaguePoints: 0,
     roundDifference: 0,
-    rankingPoints: Math.floor(avgRating * 10) // Default
+    rankingPoints: Math.floor(avgRating * 10), // Default
+    mapStats
   };
 };
 

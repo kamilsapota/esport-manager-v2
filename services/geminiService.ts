@@ -45,7 +45,7 @@ const generateRandomPlayerLocal = (avgValue: number): Player => {
     };
 };
 
-const simulateMatchLocal = (myTeam: Team, enemyTeam: Team): Partial<MatchResult> => {
+const simulateMatchLocal = (myTeam: Team, enemyTeam: Team, tacticalBonus: number = 0): Partial<MatchResult> => {
     // Calculate Team Strengths
     const getTeamStrength = (t: Team) => t.players.reduce((acc, p) => acc + (p.stats.aim * 1.2 + p.stats.reflex + p.stats.strategy * 0.8), 0);
     
@@ -55,7 +55,9 @@ const simulateMatchLocal = (myTeam: Team, enemyTeam: Team): Partial<MatchResult>
     // Win Probability with some randomness variance (+/- 10%)
     const variance = (Math.random() * 0.2) - 0.1;
     const totalStrength = myStrength + enemyStrength;
-    const myWinProb = (myStrength / totalStrength) + variance;
+    
+    // Apply tactical bonus here
+    const myWinProb = (myStrength / totalStrength) + variance + tacticalBonus;
     
     const isMyWin = Math.random() < myWinProb;
     
@@ -352,9 +354,6 @@ const calculateDerivedStats = (stats: PlayerMatchStats[], totalRounds: number) =
       let rating = (killRating * 0.45) + (survivalRating * 0.2) + (impactRating * 0.25) + ((s.kast/100) * 0.1);
       
       // Consistency check: 20-13 should be around 1.30
-      // 1.0 KPR, 0.65 DPR. -> 1.49 KR, 1.06 SR, 1.3 IMP, 0.8 KAST
-      // .67 + .21 + .32 + .08 = 1.28. Perfect.
-
       s.rating = Math.max(0.35, Math.min(2.6, rating));
   });
 };
@@ -502,7 +501,7 @@ const reconcileStats = (usStats: PlayerMatchStats[], enemyStats: PlayerMatchStat
     calculateDerivedStats(enemyStats, totalRounds);
 };
 
-export const simulateMatch = async (myTeam: Team, enemyTeam: Team, matchContext: string = "Practice Match"): Promise<MatchResult> => {
+export const simulateMatch = async (myTeam: Team, enemyTeam: Team, matchContext: string = "Practice Match", tacticalBonus: number = 0): Promise<MatchResult> => {
   const ai = getAiClient();
 
   const myTeamInfo = getTeamContext(myTeam);
@@ -538,6 +537,7 @@ export const simulateMatch = async (myTeam: Team, enemyTeam: Team, matchContext:
   const prompt = `Simulate a Counter-Strike match.
   
   CONTEXT: ${matchContext}
+  TACTICAL SITUATION: ${tacticalBonus > 0 ? `My Team (US) has analyzed the opponent and has a tactical advantage (+${(tacticalBonus*100).toFixed(0)}% win probability).` : "No special tactical advantage."}
 
   MY TEAM (US):
   ${myTeamInfo}
@@ -546,7 +546,7 @@ export const simulateMatch = async (myTeam: Team, enemyTeam: Team, matchContext:
   ${enemyTeamInfo}
 
   INSTRUCTIONS:
-  1. Decide winner based on Team Rating + Morale.
+  1. Decide winner based on Team Rating + Morale + Tactical Situation.
   2. Generate score (First to 13).
   3. Pick MVP.
   4. 'earnings': Loss=$2000-$4000, Win=$8000-$12000.
@@ -570,11 +570,10 @@ export const simulateMatch = async (myTeam: Team, enemyTeam: Team, matchContext:
 
   } catch (error) {
     console.warn("Gemini API Failed (Quota or Network), using local simulation:", error);
-    result = simulateMatchLocal(myTeam, enemyTeam);
+    result = simulateMatchLocal(myTeam, enemyTeam, tacticalBonus);
   }
 
     // --- SHARED STATS GENERATION ---
-    // We generate stats locally to save 90% of AI tokens and reduce latency by 15s.
     
     const playerStatsUs = calculateMatchStats(myTeam, result.finalScoreUs!, result.finalScoreEnemy!);
     const playerStatsEnemy = calculateMatchStats(enemyTeam, result.finalScoreEnemy!, result.finalScoreUs!);

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch } from './types';
 import { Header } from './components/Header';
@@ -10,9 +11,10 @@ import { RankingsView } from './components/RankingsView';
 import { LeagueView } from './components/LeagueView';
 import { StartScreen } from './components/StartScreen';
 import { MatchLobby } from './components/MatchLobby';
+import { PracticeView } from './components/PracticeView';
 import { simulateMatch, analyzeMatchup } from './services/geminiService';
 import { TEAMS_BY_LEAGUE, generateRoster } from './data/realTeams';
-import { Loader2, AlertTriangle, Trophy, ArrowRight, Scan, Crosshair, ShieldAlert, BrainCircuit, Calendar, Lock, ThumbsUp, ThumbsDown, TrendingUp, Hourglass } from 'lucide-react';
+import { Loader2, AlertTriangle, Trophy, ArrowRight, Scan, Crosshair, ShieldAlert, BrainCircuit, Calendar, Lock, ThumbsUp, ThumbsDown, TrendingUp, Hourglass, CheckCircle } from 'lucide-react';
 
 // This is just a placeholder type for init, will be replaced by user choice
 const EMPTY_TEAM: Team = {
@@ -25,7 +27,8 @@ const EMPTY_TEAM: Team = {
   losses: 0,
   matchesPlayed: 0,
   leaguePoints: 0,
-  roundDifference: 0
+  roundDifference: 0,
+  mapStats: { 'Dust2': 10, 'Mirage': 10, 'Inferno': 10, 'Nuke': 5, 'Train': 5, 'Overpass': 5, 'Ancient': 5 }
 };
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
@@ -147,7 +150,8 @@ export default function App() {
         losses: 0,
         matchesPlayed: 0,
         leaguePoints: 0,
-        roundDifference: 0
+        roundDifference: 0,
+        mapStats: { 'Dust2': 25, 'Mirage': 25, 'Inferno': 20, 'Nuke': 10, 'Train': 10, 'Overpass': 10, 'Ancient': 5 }
     });
 
     const startDate = new Date('2024-01-01');
@@ -270,7 +274,10 @@ export default function App() {
         if (tourney) context = `Qualifier Match for ${tourney.name}`;
       }
 
-      const result = await simulateMatch(myTeam, enemy, context);
+      // If analysis has been performed, give a 2% tactical bonus
+      const tacticalBonus = analysis ? 0.02 : 0;
+
+      const result = await simulateMatch(myTeam, enemy, context, tacticalBonus);
       
       result.isQualifier = isQualifier;
       result.tournamentId = tournamentId;
@@ -564,6 +571,12 @@ export default function App() {
                                                   {analysis.winProbability}%
                                               </span>
                                           </div>
+
+                                          {/* TACTICAL BONUS INDICATOR */}
+                                          <div className="mt-2 p-2 bg-green-900/30 border border-green-500/30 rounded flex items-center gap-2 animate-pulse">
+                                             <CheckCircle className="text-green-400" size={14} />
+                                             <span className="text-[10px] text-green-300 font-bold uppercase tracking-wide">Tactical Bonus Active: +2% Win Chance</span>
+                                          </div>
                                       </div>
                                   ) : (
                                       <button 
@@ -653,6 +666,10 @@ export default function App() {
 
             {view === GameView.LEAGUE && (
                 <LeagueView myTeam={myTeam} opponents={leagueOpponents} roundResults={latestRoundResults} />
+            )}
+
+            {view === GameView.PRACTICE && (
+                <PracticeView team={myTeam} />
             )}
 
             {view === GameView.MARKET && (
