@@ -1,7 +1,5 @@
-
-
 import React, { useState, useEffect } from 'react';
-import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch } from './types';
+import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats } from './types';
 import { Header } from './components/Header';
 import { PlayerCard } from './components/PlayerCard';
 import { MarketView } from './components/MarketView';
@@ -12,9 +10,10 @@ import { LeagueView } from './components/LeagueView';
 import { StartScreen } from './components/StartScreen';
 import { MatchLobby } from './components/MatchLobby';
 import { PracticeView } from './components/PracticeView';
+import { MapVeto } from './components/MapVeto';
 import { simulateMatch, analyzeMatchup } from './services/geminiService';
 import { TEAMS_BY_LEAGUE, generateRoster } from './data/realTeams';
-import { Loader2, AlertTriangle, Trophy, ArrowRight, Scan, Crosshair, ShieldAlert, BrainCircuit, Calendar, Lock, ThumbsUp, ThumbsDown, TrendingUp, Hourglass, CheckCircle } from 'lucide-react';
+import { Loader2, AlertTriangle, Trophy, ArrowRight, Scan, Crosshair, ShieldAlert, BrainCircuit, Calendar, Lock, ThumbsUp, ThumbsDown, TrendingUp, Hourglass, CheckCircle, Target } from 'lucide-react';
 
 // This is just a placeholder type for init, will be replaced by user choice
 const EMPTY_TEAM: Team = {
@@ -28,7 +27,7 @@ const EMPTY_TEAM: Team = {
   matchesPlayed: 0,
   leaguePoints: 0,
   roundDifference: 0,
-  mapStats: { 'Dust2': 10, 'Mirage': 10, 'Inferno': 10, 'Nuke': 5, 'Train': 5, 'Overpass': 5, 'Ancient': 5 }
+  mapStats: {}
 };
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
@@ -50,6 +49,7 @@ export default function App() {
   const [schedule, setSchedule] = useState<ScheduledMatch[]>([]);
   
   const [myTeam, setMyTeam] = useState<Team>(EMPTY_TEAM);
+  const [trainingDoneToday, setTrainingDoneToday] = useState(false);
 
   // Holds the other 19 teams in the current league to track their standings
   const [leagueOpponents, setLeagueOpponents] = useState<Team[]>([]);
@@ -61,6 +61,9 @@ export default function App() {
   const [analysis, setAnalysis] = useState<OpponentAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisTimer, setAnalysisTimer] = useState<number>(0); // Timer for analysis delay
+  
+  // Match Context needed for Veto -> Live flow
+  const [pendingMatchContext, setPendingMatchContext] = useState<{isQualifier: boolean, tournamentId?: string} | null>(null);
 
   // Initialize League Opponents
   useEffect(() => {
@@ -137,9 +140,37 @@ export default function App() {
 
   const handleStartGame = (teamName: string, country: string) => {
     const startLeague = League.OPEN;
-    // Decreased initial rating from 38 to 35 to make early game significantly harder
-    const initialRoster = generateRoster(country, 35, 0.5); 
     
+    // --- DYNAMIC BALANCING LOGIC ---
+    // Calculate the average rating of the league to ensure ~50% win rate start
+    const leagueTeams = TEAMS_BY_LEAGUE[startLeague];
+    let totalRating = 0;
+    let totalPlayers = 0;
+    
+    leagueTeams.forEach(team => {
+        team.players.forEach(p => {
+            // Simple average of key stats
+            const r = (p.stats.aim + p.stats.reflex + p.stats.strategy + p.stats.utility) / 4;
+            totalRating += r;
+            totalPlayers++;
+        });
+    });
+    
+    const avgLeagueRating = Math.round(totalRating / (totalPlayers || 1));
+    
+    // Generate initial roster with this exact average rating + 5 POINT BOOST for better player experience
+    const initialRoster = generateRoster(country, avgLeagueRating + 5, 0.5); 
+    
+    // Map Stats are now initialized at 0, waiting for user setup in Practice View
+    const maps = ['Dust2', 'Mirage', 'Inferno', 'Nuke', 'Train', 'Overpass', 'Ancient'];
+    const mapStats: Record<string, number> = {};
+    const practiceStats: Record<string, MapPracticeStats> = {};
+    
+    maps.forEach(m => {
+        mapStats[m] = 0; 
+        practiceStats[m] = { pistol: 0, ct: 0, t: 0, strat: 0 };
+    });
+
     setMyTeam({
         id: 'user-team',
         name: teamName,
@@ -151,7 +182,11 @@ export default function App() {
         matchesPlayed: 0,
         leaguePoints: 0,
         roundDifference: 0,
-        mapStats: { 'Dust2': 25, 'Mirage': 25, 'Inferno': 20, 'Nuke': 10, 'Train': 10, 'Overpass': 10, 'Ancient': 5 }
+        mapStats,
+        practiceStats,
+        isMapPoolInitialized: false,
+        consecutiveMapTrainCount: 0,
+        lastTrainedMapId: undefined
     });
 
     const startDate = new Date('2024-01-01');
@@ -174,6 +209,7 @@ export default function App() {
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + days);
     setCurrentDate(newDate);
+    setTrainingDoneToday(false);
   };
 
   const handleHirePlayer = (player: Player) => {
@@ -193,6 +229,121 @@ export default function App() {
       players: prev.players.filter(p => p.id !== player.id),
       budget: prev.budget + Math.floor(player.marketValue * 0.5)
     }));
+  };
+
+  // --- NEW TRAINING LOGIC ---
+  const handleTraining = (mapId: string, skill: keyof MapPracticeStats) => {
+      if (trainingDoneToday) return;
+
+      setMyTeam(prev => {
+          const currentProficiency = prev.mapStats[mapId] || 0;
+          
+          // 1. Determine Hard Caps
+          // First Pick map can go to 100.
+          // All other maps cap at 85.
+          const isFirstPick = prev.firstPickMap === mapId;
+          const maxCap = isFirstPick ? 100 : 85;
+
+          if (currentProficiency >= maxCap) {
+              setErrorMessage(isFirstPick ? "Map Mastery already at MAX!" : "Map capped at 85%. Only your First Pick can reach 100%.");
+              setTimeout(() => setErrorMessage(null), 4000);
+              return prev; // No change
+          }
+
+          // 2. Calculate Fatigue
+          // If training same map as last time, increment streak
+          let newStreak = 1;
+          if (prev.lastTrainedMapId === mapId) {
+              newStreak = (prev.consecutiveMapTrainCount || 0) + 1;
+          }
+
+          // 3. Calculate Base Gain based on Tiers
+          let gain = 1.0; // 0-50%
+          if (currentProficiency >= 70) gain = 0.2;
+          else if (currentProficiency >= 50) gain = 0.5;
+
+          // 4. Apply Fatigue Penalty
+          const isFatigued = newStreak >= 5;
+          if (isFatigued) {
+              gain = gain * 0.5;
+          }
+
+          // 5. Update Sub-stat
+          const currentPractice = prev.practiceStats?.[mapId] || { pistol: 0, ct: 0, t: 0, strat: 0 };
+          const newSkillValue = Math.min(100, currentPractice[skill] + (gain * 4)); // Multiply by 4 because mastery is avg of 4 sub-stats
+          
+          const newPracticeStatsForMap = {
+              ...currentPractice,
+              [skill]: newSkillValue
+          };
+          
+          // Recalculate Overall Map Mastery for this map (Average of 4 sub-skills)
+          const totalSkill = newPracticeStatsForMap.pistol + newPracticeStatsForMap.ct + newPracticeStatsForMap.t + newPracticeStatsForMap.strat;
+          const rawMastery = totalSkill / 4;
+          const newMapMastery = Math.min(maxCap, rawMastery); // Hard Clamp
+
+          // --- DECAY SYSTEM ---
+          // Slightly decrease stats of OTHER maps to prevent 100% everywhere
+          const updatedMapStats = { ...prev.mapStats };
+          const updatedPracticeStats = { ...prev.practiceStats };
+
+          // Update the trained map first
+          updatedPracticeStats[mapId] = newPracticeStatsForMap;
+          updatedMapStats[mapId] = newMapMastery;
+
+          // Decay others
+          Object.keys(updatedMapStats).forEach(otherMapId => {
+              if (otherMapId !== mapId) {
+                  // Reduce overall by ~0.5% (simulate decay)
+                  const currentVal = updatedMapStats[otherMapId];
+                  if (currentVal > 20) { // Don't decay below 20%
+                      updatedMapStats[otherMapId] = Math.max(20, currentVal - 0.5);
+                      // Simplified decay: we just update the mastery number for now, 
+                      // keeping sub-stats slightly desynced to avoid complex math, 
+                      // or we could reduce sub-stats too. Let's stick to mastery for game logic.
+                  }
+              }
+          });
+
+          return {
+              ...prev,
+              practiceStats: updatedPracticeStats,
+              mapStats: updatedMapStats,
+              lastTrainedMapId: mapId,
+              consecutiveMapTrainCount: newStreak
+          };
+      });
+
+      setTrainingDoneToday(true);
+  };
+
+  // --- INITIAL MAP SETUP ---
+  const handleInitialMapSetup = (permaban: string, firstPick: string, focusMaps: string[]) => {
+      setMyTeam(prev => {
+          const newMapStats = { ...prev.mapStats };
+          const newPracticeStats = { ...prev.practiceStats };
+          const maps = Object.keys(newMapStats);
+
+          maps.forEach(mapId => {
+              let val = 20; // Default remainder
+              if (mapId === permaban) val = 0;
+              else if (mapId === firstPick) val = 45;
+              else if (focusMaps.includes(mapId)) val = 35;
+
+              newMapStats[mapId] = val;
+              // Set sub-stats equal to mastery so average is correct
+              newPracticeStats[mapId] = { pistol: val, ct: val, t: val, strat: val };
+          });
+
+          return {
+              ...prev,
+              mapStats: newMapStats,
+              practiceStats: newPracticeStats,
+              permaban: permaban,
+              firstPickMap: firstPick,
+              isMapPoolInitialized: true
+          };
+      });
   };
 
   const handleAnalyzeOpponent = async () => {
@@ -249,18 +400,27 @@ export default function App() {
       return sortedTeams.findIndex(t => t.id === myTeam.id) + 1;
   };
 
-  const startMatch = async (isQualifier: boolean = false, tournamentId?: string) => {
-    if (myTeam.players.length < 5) {
-      setErrorMessage("You need 5 players to start a match!");
-      setTimeout(() => setErrorMessage(null), 3000);
-      return;
-    }
+  // Prepares for match by sending user to Map Veto
+  const enterVeto = (isQualifier: boolean = false, tournamentId?: string) => {
+      if (myTeam.players.length < 5) {
+        setErrorMessage("You need 5 players to start a match!");
+        setTimeout(() => setErrorMessage(null), 3000);
+        return;
+      }
 
-    if (!isQualifier && !isMatchDay) {
-       setErrorMessage("No match scheduled for today. Advance to the next match date.");
-       setTimeout(() => setErrorMessage(null), 3000);
-       return; 
-    }
+      if (!isQualifier && !isMatchDay) {
+         setErrorMessage("No match scheduled for today. Advance to the next match date.");
+         setTimeout(() => setErrorMessage(null), 3000);
+         return; 
+      }
+      
+      setPendingMatchContext({ isQualifier, tournamentId });
+      setView(GameView.MAP_VETO);
+  }
+
+  const startMatchSimulation = async (mapId: string) => {
+    if (!pendingMatchContext) return;
+    const { isQualifier, tournamentId } = pendingMatchContext;
 
     setMatchState({ isLoading: true, result: null, currentEnemyId: undefined });
     
@@ -277,7 +437,7 @@ export default function App() {
       // If analysis has been performed, give a 2% tactical bonus
       const tacticalBonus = analysis ? 0.02 : 0;
 
-      const result = await simulateMatch(myTeam, enemy, context, tacticalBonus);
+      const result = await simulateMatch(myTeam, enemy, context, tacticalBonus, mapId);
       
       result.isQualifier = isQualifier;
       result.tournamentId = tournamentId;
@@ -565,6 +725,20 @@ export default function App() {
                                               </div>
                                           </div>
 
+                                          {/* Best/Worst Map Display */}
+                                          <div className="grid grid-cols-2 gap-2 mb-3 border-t border-gray-700 pt-2">
+                                              <div className="bg-green-900/20 p-1.5 rounded">
+                                                  <div className="text-[9px] uppercase text-gray-500 font-bold">Best Map</div>
+                                                  <div className="font-bold text-white">{analysis.bestMap}</div>
+                                                  <div className="text-[10px] text-green-400 font-mono">{analysis.bestMapWinRate}% WR</div>
+                                              </div>
+                                              <div className="bg-red-900/20 p-1.5 rounded">
+                                                  <div className="text-[9px] uppercase text-gray-500 font-bold">Worst Map</div>
+                                                  <div className="font-bold text-white">{analysis.worstMap}</div>
+                                                  <div className="text-[10px] text-red-400 font-mono">{analysis.worstMapWinRate}% WR</div>
+                                              </div>
+                                          </div>
+
                                           <div className="mt-2 pt-2 border-t border-gray-700 flex justify-between items-center">
                                               <span className="text-gray-500 text-xs uppercase font-bold">Win Probability</span>
                                               <span className={`font-mono font-bold ${analysis.winProbability > 50 ? 'text-green-400' : 'text-red-400'}`}>
@@ -626,7 +800,7 @@ export default function App() {
                           </h3>
                           <div className="flex justify-between items-center mb-2">
                               <div className="flex flex-col">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold">Current Rank</span>
+                                  <span className="text-xs text-gray-500 uppercase font-bold">Current Rank</span>
                                   <span className="text-3xl font-black text-white leading-none">#{getMyLeagueRank()}</span>
                               </div>
                               <div className="text-right">
@@ -660,7 +834,15 @@ export default function App() {
                     myTeam={myTeam} 
                     opponent={nextOpponent} 
                     leagueOpponents={leagueOpponents}
-                    onStartMatch={() => startMatch()} 
+                    onStartMatch={() => enterVeto()} 
+                />
+            )}
+
+            {view === GameView.MAP_VETO && nextOpponent && (
+                <MapVeto 
+                    userTeam={myTeam}
+                    enemyTeam={nextOpponent}
+                    onComplete={(mapId) => startMatchSimulation(mapId)}
                 />
             )}
 
@@ -669,7 +851,12 @@ export default function App() {
             )}
 
             {view === GameView.PRACTICE && (
-                <PracticeView team={myTeam} />
+                <PracticeView 
+                    team={myTeam} 
+                    onTrain={handleTraining}
+                    onSetupComplete={handleInitialMapSetup}
+                    isTrainingDoneToday={trainingDoneToday}
+                />
             )}
 
             {view === GameView.MARKET && (
@@ -682,7 +869,7 @@ export default function App() {
                     currentDate={currentDate} 
                     team={myTeam} 
                     schedule={schedule}
-                    onQualify={(tId) => startMatch(true, tId)}
+                    onQualify={(tId) => enterVeto(true, tId)}
                 />
             )}
 

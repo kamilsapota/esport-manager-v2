@@ -1,5 +1,4 @@
 
-
 export enum PlayerRole {
   IGL = 'IGL',
   AWPER = 'AWPer',
@@ -46,6 +45,13 @@ export interface Player {
   matchHistory: PlayerPerformance[]; // Track performance over time
 }
 
+export interface MapPracticeStats {
+    pistol: number;
+    ct: number;
+    t: number;
+    strat: number;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -66,15 +72,33 @@ export interface Team {
   rankingPoints?: number; // Global Rank Points
   
   // Tactics
-  mapStats?: Record<string, number>; // Map Name -> Proficiency (0-100)
+  mapStats: Record<string, number>; // Map Name -> Overall Proficiency (0-100)
+  practiceStats?: Record<string, MapPracticeStats>; // Specific breakdown for user team
+  permaban?: string; // The map this team always removes if possible
+  
+  // Training Logic
+  isMapPoolInitialized?: boolean;
+  firstPickMap?: string; // The ONE map allowed to reach 100%
+  lastTrainedMapId?: string;
+  consecutiveMapTrainCount?: number;
+}
+
+export interface KillEvent {
+    killer: string; // Alias
+    victim: string; // Alias
+    assister?: string; // Alias (optional)
+    weapon: 'ak47' | 'm4a4' | 'm4a1' | 'awp' | 'deagle' | 'usp' | 'glock' | 'hkp2000' | 'tec9' | 'galilar' | 'knife' | 'hegrenade' | 'inferno' | 'mp9' | 'mac10' | 'famas' | 'ssg08' | 'p250' | 'fiveseven' | 'elite' | 'xm1014';
+    isHeadshot: boolean;
+    killerSide: 'CT' | 'T'; // relative to the event
 }
 
 export interface MatchLog {
   roundNumber: number;
   winner: 'us' | 'enemy';
-  description: string;
+  description: string; // Narrative summary
   scoreUs: number;
   scoreEnemy: number;
+  events: KillEvent[]; // The killfeed for this round
 }
 
 export interface PlayerMatchStats {
@@ -100,6 +124,7 @@ export interface MatchResult {
   tournamentId?: string;
   playerStatsUs: PlayerMatchStats[];
   playerStatsEnemy: PlayerMatchStats[];
+  mapPlayed?: string;
 }
 
 // New interface for League Results Table
@@ -119,6 +144,10 @@ export interface OpponentAnalysis {
   weaknesses: string[];
   strategy: string;
   winProbability: number;
+  bestMap?: string;
+  bestMapWinRate?: number;
+  worstMap?: string;
+  worstMapWinRate?: number;
 }
 
 export interface ScheduledMatch {
@@ -137,6 +166,7 @@ export enum GameView {
   SCHEDULE = 'SCHEDULE',
   RANKINGS = 'RANKINGS',
   MATCH_LOBBY = 'MATCH_LOBBY',
+  MAP_VETO = 'MAP_VETO',
   MATCH_LIVE = 'MATCH_LIVE',
   PRACTICE = 'PRACTICE'
 }

@@ -1,5 +1,4 @@
 
-
 import { Team, Player, PlayerRole, League } from '../types';
 
 // Helper to create player with league-adjusted stats and value
@@ -74,12 +73,29 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
       players = generateRoster(country, avgRating, multiplier);
   }
 
-  // Generate random proficiency for maps
+  // Generate POLARIZED proficiency for maps (Not random)
   const maps = ['Dust2', 'Mirage', 'Inferno', 'Nuke', 'Train', 'Overpass', 'Ancient'];
+  // Shuffle maps to assign strengths/weaknesses randomly per team
+  const shuffledMaps = [...maps].sort(() => Math.random() - 0.5);
+  
   const mapStats: Record<string, number> = {};
-  maps.forEach(m => {
-      mapStats[m] = 30 + Math.floor(Math.random() * 40); // 30-70% base proficiency
-  });
+
+  // 1. Best Map (Stronghold) - 80-95% (scaled by avgRating)
+  const bestMap = shuffledMaps[0];
+  mapStats[bestMap] = Math.min(98, Math.floor(avgRating * 1.1) + 10 + Math.floor(Math.random() * 10));
+
+  // 2. Good Maps (2) - 60-80%
+  mapStats[shuffledMaps[1]] = Math.min(90, Math.floor(avgRating) + 5 + Math.floor(Math.random() * 10));
+  mapStats[shuffledMaps[2]] = Math.min(90, Math.floor(avgRating) + Math.floor(Math.random() * 10));
+
+  // 3. Average Maps (3) - 30-60%
+  mapStats[shuffledMaps[3]] = Math.max(30, Math.floor(avgRating * 0.8) + Math.floor(Math.random() * 10 - 5));
+  mapStats[shuffledMaps[4]] = Math.max(25, Math.floor(avgRating * 0.7) + Math.floor(Math.random() * 10 - 5));
+  mapStats[shuffledMaps[5]] = Math.max(25, Math.floor(avgRating * 0.7) + Math.floor(Math.random() * 10 - 5));
+
+  // 4. Permaban / Worst Map (1) - 10-30%
+  const permaban = shuffledMaps[6];
+  mapStats[permaban] = Math.max(10, Math.floor(avgRating * 0.4) + Math.floor(Math.random() * 10));
 
   return {
     id: name.toLowerCase().replace(/\s/g, '-'),
@@ -93,7 +109,8 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
     leaguePoints: 0,
     roundDifference: 0,
     rankingPoints: Math.floor(avgRating * 10), // Default
-    mapStats
+    mapStats,
+    permaban: permaban // Assign the worst map as their permaban
   };
 };
 
