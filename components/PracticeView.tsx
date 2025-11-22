@@ -1,70 +1,47 @@
-import React, { useState } from 'react';
-import { Team, MapPracticeStats } from '../types';
-import { Target, Swords, Zap, Brain, CheckCircle, Lock, Activity, Users, AlertTriangle, Flame, Crosshair, Shield, Dumbbell } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { Team, MapPracticeStats, Player, PlayerStats } from '../types';
+import { Target, Swords, Zap, Brain, CheckCircle, Lock, Activity, Users, AlertTriangle, Flame, Crosshair, Shield, Dumbbell, ChevronRight, Battery } from 'lucide-react';
+import { CountryFlag } from './CountryFlag';
 
 interface PracticeViewProps {
   team: Team;
   onTrain: (mapId: string, skill: keyof MapPracticeStats) => void;
+  onIndividualTrain: (playerId: string, drillType: DrillType) => void;
   onSetupComplete: (permaban: string, firstPick: string, focusMaps: string[]) => void;
-  isTrainingDoneToday: boolean;
+  dailyActivities: { mapTraining: boolean; individualDrills: number };
 }
+
+// Drill Types
+export type DrillType = 'DEATHMATCH' | 'RETAKE' | 'GRENADE' | 'DEMO' | 'SCRIM' | 'REACTION';
+
+const DRILLS: { id: DrillType, name: string, main: keyof PlayerStats, sub: keyof PlayerStats, desc: string }[] = [
+    { id: 'DEATHMATCH', name: 'Deathmatch Session', main: 'aim', sub: 'reflex', desc: '+Aim, +Reflex' },
+    { id: 'RETAKE', name: 'Retake Scenarios', main: 'clutch', sub: 'strategy', desc: '+Clutch, +Strategy' },
+    { id: 'GRENADE', name: 'Grenade Lineups', main: 'utility', sub: 'strategy', desc: '+Utility, +Strategy' },
+    { id: 'DEMO', name: 'Demo Review', main: 'strategy', sub: 'teamwork', desc: '+Strategy, +Teamwork' },
+    { id: 'SCRIM', name: '5vs5 Scrim', main: 'teamwork', sub: 'clutch', desc: '+Teamwork, +Mental' },
+    { id: 'REACTION', name: 'Reaction Test', main: 'reflex', sub: 'aim', desc: '+Reflex, +Aim' },
+];
 
 // HLTV static images for maps
 const MAP_POOL = [
-    { 
-        id: 'Dust2', 
-        name: 'Dust 2', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/dust2.png', 
-        desc: 'The classic. Aim heavy, simple layout.',
-        logoColor: 'text-yellow-500'
-    },
-    { 
-        id: 'Mirage', 
-        name: 'Mirage', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/mirage.png', 
-        desc: 'Balanced middle. Execution heavy.',
-        logoColor: 'text-orange-500'
-    },
-    { 
-        id: 'Inferno', 
-        name: 'Inferno', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/inferno.png', 
-        desc: 'Narrow chokepoints. Utility king.',
-        logoColor: 'text-blue-500'
-    },
-    { 
-        id: 'Nuke', 
-        name: 'Nuke', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/nuke.png', 
-        desc: 'Vertical gameplay. Rotation speed.',
-        logoColor: 'text-yellow-400'
-    },
-    { 
-        id: 'Train', 
-        name: 'Train', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/train.png', 
-        desc: 'Long angles. AWP dominance.',
-        logoColor: 'text-green-600'
-    },
-    { 
-        id: 'Overpass', 
-        name: 'Overpass', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/overpass.png', 
-        desc: 'Complex rotations. CT Aggression.',
-        logoColor: 'text-orange-400'
-    },
-    { 
-        id: 'Ancient', 
-        name: 'Ancient', 
-        img: 'https://www.hltv.org/img/static/statsmatchmaps/ancient.png', 
-        desc: 'Green maze. Close quarters.',
-        logoColor: 'text-green-500'
-    }
+    { id: 'Dust2', name: 'Dust 2', img: 'https://www.hltv.org/img/static/statsmatchmaps/dust2.png', desc: 'The classic. Aim heavy, simple layout.', logoColor: 'text-yellow-500' },
+    { id: 'Mirage', name: 'Mirage', img: 'https://www.hltv.org/img/static/statsmatchmaps/mirage.png', desc: 'Balanced middle. Execution heavy.', logoColor: 'text-orange-500' },
+    { id: 'Inferno', name: 'Inferno', img: 'https://www.hltv.org/img/static/statsmatchmaps/inferno.png', desc: 'Narrow chokepoints. Utility king.', logoColor: 'text-blue-500' },
+    { id: 'Nuke', name: 'Nuke', img: 'https://www.hltv.org/img/static/statsmatchmaps/nuke.png', desc: 'Vertical gameplay. Rotation speed.', logoColor: 'text-yellow-400' },
+    { id: 'Train', name: 'Train', img: 'https://www.hltv.org/img/static/statsmatchmaps/train.png', desc: 'Long angles. AWP dominance.', logoColor: 'text-green-600' },
+    { id: 'Overpass', name: 'Overpass', img: 'https://www.hltv.org/img/static/statsmatchmaps/overpass.png', desc: 'Complex rotations. CT Aggression.', logoColor: 'text-orange-400' },
+    { id: 'Ancient', name: 'Ancient', img: 'https://www.hltv.org/img/static/statsmatchmaps/ancient.png', desc: 'Green maze. Close quarters.', logoColor: 'text-green-500' }
 ];
 
-export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onSetupComplete, isTrainingDoneToday }) => {
+export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onIndividualTrain, onSetupComplete, dailyActivities }) => {
     const [activeTab, setActiveTab] = useState<'team' | 'individual'>('team');
     const [selectedMap, setSelectedMap] = useState<string | null>(null);
+    
+    // Use ID to always derive fresh player state from props
+    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(team.players[0]?.id || null);
+    const selectedPlayer = team.players.find(p => p.id === selectedPlayerId) || null;
 
     // Wizard State
     const [setupStep, setSetupStep] = useState<number>(0); // 0: Permaban, 1: First Pick, 2: Focus
@@ -72,8 +49,15 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onSet
     const [firstPick, setFirstPick] = useState<string>('');
     const [focusMaps, setFocusMaps] = useState<string[]>([]);
 
+    // Ensure we have a selected player if the roster changes
+    useEffect(() => {
+        if (!selectedPlayerId && team.players.length > 0) {
+            setSelectedPlayerId(team.players[0].id);
+        }
+    }, [team.players, selectedPlayerId]);
+
     if (!team.isMapPoolInitialized) {
-        // WIZARD RENDER
+        // WIZARD RENDER (Same as before)
         const handleWizardSelect = (mapId: string) => {
             if (setupStep === 0) {
                 setPermaban(mapId);
@@ -183,8 +167,8 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onSet
         const proficiency = getProficiency(mapId);
         
         // Diminishing Returns Warning
-        if (proficiency >= 70) warnings.push({ type: 'hard', text: "Diminished Returns: +0.2% gain" });
-        else if (proficiency >= 50) warnings.push({ type: 'soft', text: "Diminished Returns: +0.5% gain" });
+        if (proficiency >= 70) warnings.push({ type: 'hard', text: "Slow Progress (Level 3)" });
+        else if (proficiency >= 50) warnings.push({ type: 'soft', text: "Normal Progress (Level 2)" });
 
         // Fatigue Warning
         if (team.lastTrainedMapId === mapId && (team.consecutiveMapTrainCount || 0) >= 4) {
@@ -200,37 +184,32 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onSet
         return warnings;
     };
 
-    const SkillBar = ({ label, value, icon: Icon, color, onTrainClick, isDisabled }: { label: string, value: number, icon: any, color: string, onTrainClick: () => void, isDisabled: boolean }) => (
-        <div className="bg-gray-900/50 p-4 rounded border border-gray-800 hover:border-gray-700 transition-colors">
-            <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded bg-gray-800 ${color}`}>
-                        <Icon size={16} />
-                    </div>
-                    <span className="text-sm font-bold text-gray-200">{label}</span>
+    const XPBar = ({ label, level, xp, requiredXp, color }: { label: string, level: number, xp: number, requiredXp: number, color: string }) => (
+        <div className="mb-3">
+            <div className="flex justify-between items-end mb-1">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">{label}</span>
+                <div className="text-right">
+                    <span className={`text-sm font-black ${color}`}>{level}</span>
+                    <span className="text-[10px] text-gray-500 ml-1">OVR</span>
                 </div>
-                <span className="text-xs font-mono font-bold text-gray-400">{value}%</span>
             </div>
-            <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden mb-3">
-                <div className={`h-full rounded-full ${color.replace('text-', 'bg-')}`} style={{ width: `${value}%` }}></div>
+            <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden relative">
+                {/* ANIMATED BAR */}
+                <div 
+                    className={`h-full ${color.replace('text-', 'bg-')} transition-all duration-1000 ease-out`} 
+                    style={{ width: `${(xp / requiredXp) * 100}%` }}
+                ></div>
             </div>
-            <button 
-                onClick={onTrainClick}
-                disabled={isDisabled}
-                className={`w-full py-1.5 text-xs font-bold uppercase tracking-wider rounded transition-colors ${
-                    isDisabled 
-                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed' 
-                    : 'bg-gray-700 hover:bg-cs-yellow hover:text-black text-white'
-                }`}
-            >
-                Train
-            </button>
+            <div className="text-[10px] text-right text-gray-600 mt-0.5 font-mono">{Math.floor(xp)} / {Math.floor(requiredXp)} XP</div>
         </div>
     );
 
     const selectedMapWarnings = selectedMap ? getMapWarnings(selectedMap) : [];
     const isFirstPickSelected = selectedMap === team.firstPickMap;
     const isPermabanSelected = selectedMap === team.permaban;
+
+    const drillsRemaining = 3 - dailyActivities.individualDrills;
+    const mapTrainingRemaining = dailyActivities.mapTraining ? 0 : 1;
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -246,51 +225,175 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onSet
                     </div>
                 </div>
                 
-                <div className="flex bg-gray-900 p-1 rounded-lg border border-gray-800">
-                    <button 
-                        onClick={() => setActiveTab('team')}
-                        className={`px-4 py-2 rounded text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'team' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
-                    >
-                        <Swords size={16} /> Team Practice
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('individual')}
-                        className={`px-4 py-2 rounded text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'individual' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
-                    >
-                        <Dumbbell size={16} /> Individual Training
-                    </button>
+                <div className="flex items-center gap-6">
+                    {/* Daily Limits UI */}
+                    <div className="flex gap-3">
+                         <div className={`px-4 py-2 rounded border flex flex-col items-center justify-center ${mapTrainingRemaining > 0 ? 'bg-gray-900 border-green-900/50 text-green-400' : 'bg-gray-900/50 border-gray-800 text-gray-600'}`}>
+                             <span className="text-[10px] uppercase font-bold">Map Session</span>
+                             <span className="font-mono font-bold text-lg leading-none">{mapTrainingRemaining}/1</span>
+                         </div>
+                         <div className={`px-4 py-2 rounded border flex flex-col items-center justify-center ${drillsRemaining > 0 ? 'bg-gray-900 border-blue-900/50 text-blue-400' : 'bg-gray-900/50 border-gray-800 text-gray-600'}`}>
+                             <span className="text-[10px] uppercase font-bold">Drill Slots</span>
+                             <span className="font-mono font-bold text-lg leading-none">{drillsRemaining}/3</span>
+                         </div>
+                    </div>
+
+                    <div className="flex bg-gray-900 p-1 rounded-lg border border-gray-800">
+                        <button 
+                            onClick={() => setActiveTab('team')}
+                            className={`px-4 py-2 rounded text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'team' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            <Swords size={16} /> Team Practice
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('individual')}
+                            className={`px-4 py-2 rounded text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'individual' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            <Dumbbell size={16} /> Individual Training
+                        </button>
+                    </div>
                 </div>
             </div>
             
             {/* DAILY LOCK INDICATOR */}
-            {isTrainingDoneToday && (
+            {drillsRemaining === 0 && mapTrainingRemaining === 0 && (
                  <div className="mb-6 flex items-center gap-2 bg-red-900/20 border border-red-800/50 px-4 py-3 rounded-lg text-red-400 w-full animate-fade-in">
                     <Lock size={18} />
-                    <span className="font-bold uppercase tracking-wider">Facility Closed for the Day (Practice Complete)</span>
+                    <span className="font-bold uppercase tracking-wider">Facility Closed for the Day (All Slots Used)</span>
                 </div>
             )}
 
-            {/* INDIVIDUAL TRAINING (LOCKED) */}
+            {/* INDIVIDUAL TRAINING */}
             {activeTab === 'individual' && (
-                <div className="flex flex-col items-center justify-center h-[400px] bg-cs-dark border border-gray-800 rounded-xl shadow-xl p-8 relative overflow-hidden animate-fade-in">
-                    <div className="absolute inset-0 bg-[url('https://www.hltv.org/img/static/statsmatchmaps/train.png')] bg-cover bg-center opacity-5 grayscale pointer-events-none"></div>
-                    
-                    <div className="bg-gray-900/80 p-6 rounded-full border-2 border-dashed border-gray-700 mb-6">
-                        <Lock size={48} className="text-gray-500" />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
+                    {/* Player List */}
+                    <div className="lg:col-span-1 bg-cs-dark border border-gray-800 rounded-xl overflow-hidden shadow-xl">
+                        <div className="bg-gray-900 px-4 py-3 border-b border-gray-800">
+                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Select Player</h3>
+                        </div>
+                        <div className="divide-y divide-gray-800">
+                            {team.players.map(p => (
+                                <button 
+                                    key={p.id}
+                                    onClick={() => setSelectedPlayerId(p.id)}
+                                    className={`w-full p-4 flex items-center justify-between hover:bg-gray-800/50 transition-colors ${selectedPlayerId === p.id ? 'bg-cs-blue/10 border-l-4 border-cs-blue' : ''}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <CountryFlag countryCode={p.country} />
+                                        <span className={`font-bold ${selectedPlayerId === p.id ? 'text-white' : 'text-gray-400'}`}>{p.alias}</span>
+                                    </div>
+                                    <ChevronRight size={16} className={`transition-opacity ${selectedPlayerId === p.id ? 'opacity-100 text-cs-blue' : 'opacity-0'}`} />
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    
-                    <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">Individual Training Locked</h3>
-                    <p className="text-gray-400 text-center max-w-md mb-6">
-                        This facility is under renovation. You will soon be able to assign specific aim routines and utility drills to individual players.
-                    </p>
-                    
-                    <div className="text-xs font-bold text-gray-600 uppercase tracking-widest border border-gray-800 px-4 py-2 rounded bg-gray-900">
-                        Coming Soon
+
+                    {/* Drill Selection & Stats */}
+                    <div className="lg:col-span-2 bg-cs-dark border border-gray-800 rounded-xl shadow-xl p-6">
+                        {selectedPlayer ? (
+                            <>
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center font-bold text-xl text-gray-500 border border-gray-700">
+                                            {selectedPlayer.alias.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-black text-white">{selectedPlayer.alias}</h3>
+                                            <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{selectedPlayer.role}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] text-gray-500 uppercase font-bold">Rating</div>
+                                        <div className="text-2xl font-mono font-bold text-green-400">
+                                            {((selectedPlayer.stats.aim + selectedPlayer.stats.reflex + selectedPlayer.stats.strategy + selectedPlayer.stats.utility)/4).toFixed(0)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Stats/XP Overview */}
+                                <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-8 bg-black/20 p-4 rounded-lg border border-gray-800">
+                                    <XPBar 
+                                        label="Aim" 
+                                        level={selectedPlayer.stats.aim} 
+                                        xp={selectedPlayer.xp?.aim || 0} 
+                                        requiredXp={500 + (selectedPlayer.stats.aim * 50)} 
+                                        color="text-yellow-400" 
+                                    />
+                                    <XPBar 
+                                        label="Reflex" 
+                                        level={selectedPlayer.stats.reflex} 
+                                        xp={selectedPlayer.xp?.reflex || 0} 
+                                        requiredXp={500 + (selectedPlayer.stats.reflex * 50)} 
+                                        color="text-orange-400" 
+                                    />
+                                    <XPBar 
+                                        label="Strategy" 
+                                        level={selectedPlayer.stats.strategy} 
+                                        xp={selectedPlayer.xp?.strategy || 0} 
+                                        requiredXp={500 + (selectedPlayer.stats.strategy * 50)} 
+                                        color="text-blue-400" 
+                                    />
+                                    <XPBar 
+                                        label="Utility" 
+                                        level={selectedPlayer.stats.utility} 
+                                        xp={selectedPlayer.xp?.utility || 0} 
+                                        requiredXp={500 + (selectedPlayer.stats.utility * 50)} 
+                                        color="text-purple-400" 
+                                    />
+                                    <XPBar 
+                                        label="Teamwork" 
+                                        level={selectedPlayer.stats.teamwork} 
+                                        xp={selectedPlayer.xp?.teamwork || 0} 
+                                        requiredXp={500 + (selectedPlayer.stats.teamwork * 50)} 
+                                        color="text-green-400" 
+                                    />
+                                    <XPBar 
+                                        label="Clutch" 
+                                        level={selectedPlayer.stats.clutch} 
+                                        xp={selectedPlayer.xp?.clutch || 0} 
+                                        requiredXp={500 + (selectedPlayer.stats.clutch * 50)} 
+                                        color="text-red-400" 
+                                    />
+                                </div>
+
+                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+                                    Assign Drill
+                                    <span className={`${drillsRemaining > 0 ? 'text-blue-400' : 'text-red-500'} text-xs`}>{drillsRemaining} slots remaining</span>
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {DRILLS.map(drill => (
+                                        <button
+                                            key={drill.id}
+                                            onClick={() => onIndividualTrain(selectedPlayer.id, drill.id)}
+                                            disabled={drillsRemaining <= 0}
+                                            className={`p-4 border rounded-lg text-left transition-all relative overflow-hidden group
+                                                ${drillsRemaining <= 0 
+                                                    ? 'bg-gray-800 border-gray-700 opacity-50 cursor-not-allowed' 
+                                                    : 'bg-gray-900 border-gray-700 hover:border-cs-blue hover:bg-gray-800'}`}
+                                        >
+                                            <div className="relative z-10">
+                                                <div className="font-bold text-white text-lg mb-1 group-hover:text-cs-blue transition-colors">{drill.name}</div>
+                                                <div className="text-xs text-gray-400 font-mono uppercase mb-2">{drill.desc}</div>
+                                                <div className="flex gap-2 mt-2">
+                                                    <span className="text-[10px] bg-gray-800 px-2 py-1 rounded border border-gray-700 text-gray-300">
+                                                        XP: 400-600
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                                <p>Select a player to view development</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
-            {/* MAP PRACTICE (EXISTING LOGIC) */}
+            {/* MAP PRACTICE (TEAM) */}
             {activeTab === 'team' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
                     {/* MAP SELECTION GRID */}
@@ -384,50 +487,38 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onSet
                                             </div>
                                         )}
 
-                                        <h5 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <Activity size={16} /> Training Modules
+                                        <h5 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Activity size={16} /> Training Modules
+                                            </div>
+                                            <span className={`${mapTrainingRemaining > 0 ? 'text-green-400' : 'text-red-500'} text-xs`}>{mapTrainingRemaining} session remaining</span>
                                         </h5>
                                         
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <SkillBar 
-                                                label="Pistol Rounds" 
-                                                value={getSubStats(selectedMap).pistol} 
-                                                icon={Crosshair} 
-                                                color="text-gray-300" 
-                                                onTrainClick={() => onTrain(selectedMap, 'pistol')}
-                                                isDisabled={isTrainingDoneToday}
-                                            />
-                                            <SkillBar 
-                                                label="CT Side Setup" 
-                                                value={getSubStats(selectedMap).ct} 
-                                                icon={Shield} 
-                                                color="text-blue-400" 
-                                                onTrainClick={() => onTrain(selectedMap, 'ct')}
-                                                isDisabled={isTrainingDoneToday}
-                                            />
-                                            <SkillBar 
-                                                label="T Side Executes" 
-                                                value={getSubStats(selectedMap).t} 
-                                                icon={Swords} 
-                                                color="text-cs-yellow" 
-                                                onTrainClick={() => onTrain(selectedMap, 't')}
-                                                isDisabled={isTrainingDoneToday}
-                                            />
-                                            <SkillBar 
-                                                label="Analyze Top Teams" 
-                                                value={getSubStats(selectedMap).strat} 
-                                                icon={Brain} 
-                                                color="text-purple-400" 
-                                                onTrainClick={() => onTrain(selectedMap, 'strat')}
-                                                isDisabled={isTrainingDoneToday}
-                                            />
-                                        </div>
-                                        <div className="mt-6 bg-blue-900/20 border border-blue-800/50 p-4 rounded-lg text-xs text-center text-gray-400 italic">
-                                            <p className="mb-1">
-                                                <span className="font-bold text-blue-400">Pro Tip:</span> Rotate your map training.
-                                            </p>
-                                            Training the same map 5 days in a row causes Fatigue (50% reduced gains).
-                                            Proficiency gains slow down significantly after 50% and 70%.
+                                            {['pistol', 'ct', 't', 'strat'].map(type => (
+                                                <div key={type} className="bg-gray-900/50 p-4 rounded border border-gray-800 hover:border-gray-700 transition-colors">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            {type === 'pistol' && <Crosshair size={16} className="text-gray-400" />}
+                                                            {type === 'ct' && <Shield size={16} className="text-blue-400" />}
+                                                            {type === 't' && <Swords size={16} className="text-cs-yellow" />}
+                                                            {type === 'strat' && <Brain size={16} className="text-purple-400" />}
+                                                            
+                                                            <span className="text-sm font-bold text-gray-200 capitalize">
+                                                                {type === 'strat' ? 'Analysis' : type === 'ct' ? 'CT Setup' : type === 't' ? 'T Executes' : 'Pistol Rounds'}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-xs font-mono font-bold text-gray-400">{getSubStats(selectedMap)[type as keyof MapPracticeStats]}%</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => onTrain(selectedMap, type as keyof MapPracticeStats)} 
+                                                        disabled={mapTrainingRemaining <= 0} 
+                                                        className={`w-full py-1.5 text-xs font-bold uppercase rounded ${mapTrainingRemaining <= 0 ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-700 hover:bg-cs-yellow hover:text-black text-white'}`}
+                                                    >
+                                                        Train
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </>

@@ -16,11 +16,18 @@ export enum League {
   PRO = 'Pro League'
 }
 
+export enum Tactic {
+  DEFAULT = 'Default',
+  AGGRESSIVE = 'Aggressive',
+  PASSIVE = 'Passive'
+}
+
 export interface PlayerStats {
   aim: number;
   reflex: number;
   strategy: number;
-  utility: number;
+  utility: number;  // NEW
+  teamwork: number; // NEW
   clutch: number;
 }
 
@@ -38,11 +45,15 @@ export interface Player {
   country: string;
   role: PlayerRole;
   stats: PlayerStats;
+  
+  // XP System
+  xp: Record<keyof PlayerStats, number>; // Current XP for each stat
+  
   marketValue: number;
   salary: number;
   morale: number; // 0-100
   avatarSeed?: string;
-  matchHistory: PlayerPerformance[]; // Track performance over time
+  matchHistory: PlayerPerformance[];
 }
 
 export interface MapPracticeStats {
@@ -62,43 +73,48 @@ export interface Team {
   // Record
   wins: number;
   losses: number;
-  matchesPlayed: number; // To keep sync with user
+  matchesPlayed: number;
   
   // ESEA Specifics
-  leaguePoints: number; // 3 for win, 0 for loss
-  roundDifference: number; // RD
+  leaguePoints: number;
+  roundDifference: number;
   
   // HLTV Specifics
-  rankingPoints?: number; // Global Rank Points
+  rankingPoints?: number;
   
-  // Tactics
-  mapStats: Record<string, number>; // Map Name -> Overall Proficiency (0-100)
-  practiceStats?: Record<string, MapPracticeStats>; // Specific breakdown for user team
-  permaban?: string; // The map this team always removes if possible
+  // Tactics & Training
+  mapStats: Record<string, number>;
+  practiceStats?: Record<string, MapPracticeStats>;
+  permaban?: string;
   
   // Training Logic
   isMapPoolInitialized?: boolean;
-  firstPickMap?: string; // The ONE map allowed to reach 100%
+  firstPickMap?: string;
   lastTrainedMapId?: string;
   consecutiveMapTrainCount?: number;
+  
+  // Match Strategy
+  preferredTactic?: Tactic;
 }
 
 export interface KillEvent {
-    killer: string; // Alias
-    victim: string; // Alias
-    assister?: string; // Alias (optional)
+    killer: string;
+    victim: string;
+    assister?: string;
     weapon: 'ak47' | 'm4a4' | 'm4a1' | 'awp' | 'deagle' | 'usp' | 'glock' | 'hkp2000' | 'tec9' | 'galilar' | 'knife' | 'hegrenade' | 'inferno' | 'mp9' | 'mac10' | 'famas' | 'ssg08' | 'p250' | 'fiveseven' | 'elite' | 'xm1014';
     isHeadshot: boolean;
-    killerSide: 'CT' | 'T'; // relative to the event
+    killerSide: 'CT' | 'T';
 }
 
 export interface MatchLog {
   roundNumber: number;
   winner: 'us' | 'enemy';
-  description: string; // Narrative summary
+  description: string;
   scoreUs: number;
   scoreEnemy: number;
-  events: KillEvent[]; // The killfeed for this round
+  events: KillEvent[];
+  moneyUs: number; // Track for UI/Debugging
+  moneyEnemy: number;
 }
 
 export interface PlayerMatchStats {
@@ -107,9 +123,9 @@ export interface PlayerMatchStats {
   kills: number;
   deaths: number;
   assists: number;
-  adr: number; // Average Damage per Round
-  kast: number; // Percentage
-  rating: number; // 2.0 Rating
+  adr: number;
+  kast: number;
+  rating: number;
 }
 
 export interface MatchResult {
@@ -127,7 +143,6 @@ export interface MatchResult {
   mapPlayed?: string;
 }
 
-// New interface for League Results Table
 export interface LeagueRoundResult {
     teamA: string;
     teamB: string;
@@ -152,11 +167,11 @@ export interface OpponentAnalysis {
 
 export interface ScheduledMatch {
     id: string;
-    date: string; // ISO Date string
+    date: string;
     opponentId: string;
     isPlayed: boolean;
     type: 'LEAGUE' | 'TOURNAMENT' | 'PRACTICE';
-    leagueName?: string; // e.g. "ESEA Open"
+    leagueName?: string;
 }
 
 export enum GameView {
@@ -176,7 +191,7 @@ export type ParticipationStatus = 'invited' | 'qualified' | 'eliminated' | 'none
 export interface Tournament {
   id: string;
   name: string;
-  startDate: string; // ISO YYYY-MM-DD
+  startDate: string;
   prizePool: number;
   participationStatus: ParticipationStatus;
 }

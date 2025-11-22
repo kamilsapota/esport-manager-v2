@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Player, MatchResult, Team, PlayerRole, OpponentAnalysis, PlayerMatchStats, MatchLog, KillEvent } from '../types';
+import { Player, MatchResult, Team, PlayerRole, OpponentAnalysis, PlayerMatchStats, MatchLog, KillEvent, Tactic } from '../types';
 
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
@@ -9,504 +10,347 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// --- FALLBACK GENERATORS (LOCAL) ---
+// --- ECONOMY CONSTANTS ---
+const TEAM_SIZE = 5;
+const WIN_BONUS = 3250;
+const BOMB_BONUS = 250; 
+const BASE_LOSS_BONUS = 1400;
+const LOSS_BONUS_STEP = 500;
+const MAX_LOSS_BONUS = 3400;
+const MAX_MONEY_PER_PLAYER = 16000;
+const MAX_TEAM_MONEY = MAX_MONEY_PER_PLAYER * TEAM_SIZE; // 80,000
 
-const generateRandomPlayerLocal = (avgValue: number): Player => {
-    const roles = [PlayerRole.IGL, PlayerRole.AWPER, PlayerRole.ENTRY, PlayerRole.SUPPORT, PlayerRole.LURKER];
-    const countries = ['DK', 'SE', 'FR', 'DE', 'PL', 'RU', 'UA', 'US', 'BR'];
-    const names = ['Ghost', 'Viper', 'Dash', 'Strike', 'Pixel', 'Glitch', 'Neon', 'Flux', 'Echo', 'Ace'];
-    
-    const role = roles[Math.floor(Math.random() * roles.length)];
-    const country = countries[Math.floor(Math.random() * countries.length)];
-    const alias = `${names[Math.floor(Math.random() * names.length)]}${Math.floor(Math.random() * 99)}`;
-    
-    // Generate stats around 40-90
-    const baseStat = 40 + Math.floor(Math.random() * 50);
-    
-    return {
-        id: crypto.randomUUID(),
-        alias,
-        fullName: alias,
-        age: 16 + Math.floor(Math.random() * 10),
-        country,
-        role,
-        stats: {
-            aim: Math.min(99, baseStat + Math.floor(Math.random() * 20 - 10)),
-            reflex: Math.min(99, baseStat + Math.floor(Math.random() * 20 - 10)),
-            strategy: Math.min(99, baseStat + Math.floor(Math.random() * 20 - 10)),
-            utility: Math.min(99, baseStat + Math.floor(Math.random() * 20 - 10)),
-            clutch: Math.min(99, baseStat + Math.floor(Math.random() * 20 - 10)),
-        },
-        marketValue: avgValue * (0.8 + Math.random() * 0.4),
-        salary: avgValue * 0.05,
-        morale: 50 + Math.floor(Math.random() * 40),
-        matchHistory: []
-    };
-};
+// COSTS (Total for 5 players from 0)
+const COST_FULL_BUY = 21500; // ~4300 per player (AK/M4 + Armor + Util)
+const COST_FORCE_BUY = 9500; // ~1900 per player (SMG/Deagle + Armor)
+const COST_SEMI_ECO = 2500; // P250s
+const COST_ECO = 0;
 
-// Economy Types
-type BuyType = 'PISTOL' | 'FORCE' | 'ECO' | 'ANTI_ECO' | 'FULL_BUY';
+// SAVED EQUIPMENT VALUE (Per player)
+const VALUE_SAVED_FULL = 3700; // Value of keeping Rifle + Armor
+const VALUE_SAVED_FORCE = 1200; // Value of keeping SMG + Armor
 
-// Helper to generate realistic killfeed events that SUM up to the calculated stats
-const generateDetailedMatchLogs = (
-    finalScoreUs: number,
-    finalScoreEnemy: number,
-    usStats: PlayerMatchStats[],
-    enemyStats: PlayerMatchStats[],
-    myTeam: Team,
-    enemyTeam: Team
-): MatchLog[] => {
-    const logs: MatchLog[] = [];
-    let currentScoreUs = 0;
-    let currentScoreEnemy = 0;
-    
-    // Determine Winner
-    const winnerIsUs = finalScoreUs > finalScoreEnemy;
-    const winnerScore = 13; // CS2 MR12
-    const loserScore = winnerIsUs ? finalScoreEnemy : finalScoreUs;
+export type BuyType = 'FULL_BUY' | 'FORCE_BUY' | 'SEMI_ECO' | 'ECO';
 
-    // Pre-calculate the sequence of wins to ensure we end EXACTLY at the target score without overshooting
-    const roundWinners: ('us' | 'enemy')[] = [];
-    
-    // 1. Fill array with required wins
-    for(let i=0; i<winnerScore-1; i++) roundWinners.push(winnerIsUs ? 'us' : 'enemy'); // -1 because last round is fixed
-    for(let i=0; i<loserScore; i++) roundWinners.push(winnerIsUs ? 'enemy' : 'us');
-    
-    // 2. Shuffle rounds (except the last one)
-    roundWinners.sort(() => Math.random() - 0.5);
-    
-    // 3. Append the game-winning round at the end
-    roundWinners.push(winnerIsUs ? 'us' : 'enemy');
-
-    // Create "Decks" of events for each player to distribute across rounds
-    const usKillDeck = usStats.flatMap(p => Array(p.kills).fill(p.alias));
-    const enemyKillDeck = enemyStats.flatMap(p => Array(p.kills).fill(p.alias));
-    const usDeathDeck = usStats.flatMap(p => Array(p.deaths).fill(p.alias));
-    const enemyDeathDeck = enemyStats.flatMap(p => Array(p.deaths).fill(p.alias));
-
-    // Shuffle decks
-    const shuffle = (arr: any[]) => arr.sort(() => Math.random() - 0.5);
-    shuffle(usKillDeck); shuffle(enemyKillDeck); shuffle(usDeathDeck); shuffle(enemyDeathDeck);
-
-    // Economy State Tracking
-    let usBuy: BuyType = 'PISTOL';
-    let enemyBuy: BuyType = 'PISTOL';
-    let usPrevRoundResult: 'WIN' | 'LOSS' | null = null;
-    let enemyPrevRoundResult: 'WIN' | 'LOSS' | null = null;
-
-    // Helper to determine Next Round Buy
-    const determineNextBuy = (
-        prevBuy: BuyType, 
-        result: 'WIN' | 'LOSS', 
-        isPistolRound: boolean,
-        roundNum: number,
-        myScore: number,
-        enemyScore: number
-    ): BuyType => {
-        if (isPistolRound) return 'PISTOL';
-
-        // CRITICAL: Last Round of Half (12) or Match Point Logic (Enemy has 12)
-        const isHalfLastRound = roundNum === 12;
-        const isMatchPointForEnemy = enemyScore === 12;
-        // If it's the last round, we MUST spend all money. 
-        // If we were going to ECO or FORCE, we FORCE with everything we have.
-        // If we were FULL_BUY, we stay FULL_BUY.
-        const mustForce = isHalfLastRound || isMatchPointForEnemy;
-
-        let nextBuy: BuyType = 'ECO';
-
-        if (result === 'WIN') {
-            if (prevBuy === 'PISTOL') nextBuy = 'ANTI_ECO'; // Won pistol -> Anti-Eco
-            else if (prevBuy === 'FORCE') nextBuy = 'FULL_BUY'; // Won force -> Good money usually
-            else nextBuy = 'FULL_BUY'; // Kept winning -> Full Buy
-        } else {
-            // LOST
-            if (prevBuy === 'PISTOL') nextBuy = 'FORCE'; // Lost pistol -> Force round 2 (ALWAYS)
-            else if (prevBuy === 'FORCE') nextBuy = 'ECO'; // Lost pistol AND force -> Eco round 3
-            else if (prevBuy === 'ECO') nextBuy = 'FULL_BUY'; // Saved last round -> Buy now
-            else if (prevBuy === 'FULL_BUY') nextBuy = 'FORCE'; // Lost full buy -> forced to save or half buy
-            // Correction for Full Buy Loss: Usually you drop to Force/Eco. 
-            // If loss bonus is high, maybe force. For sim simplicity:
-            // If we lost a Full Buy, we usually need to Eco unless loss bonus is max. 
-            // Let's alternate for variance:
-            else nextBuy = Math.random() > 0.5 ? 'ECO' : 'FORCE'; 
-        }
-
-        // OVERRIDE: If Must Force, never Eco
-        if (mustForce && nextBuy === 'ECO') {
-            return 'FORCE';
-        }
-
-        return nextBuy;
-    };
-
-    const getWinProbability = (usBuy: BuyType, enemyBuy: BuyType): number => {
-        // Returns probability (0-1) that US wins
-        const strength = { 'ECO': 1, 'PISTOL': 2, 'FORCE': 3, 'ANTI_ECO': 4, 'FULL_BUY': 5 };
-        
-        const usStr = strength[usBuy];
-        const enStr = strength[enemyBuy];
-        
-        if (usStr === enStr) return 0.5;
-        
-        // Eco vs Full = 1 vs 5. Diff = 4.
-        // Full vs Eco = 5 vs 1. Diff = 4.
-        const diff = usStr - enStr; // Range -4 to 4
-        
-        // Base chance 50% + (diff * 10%)
-        // Eco(1) vs Full(5) = -4 -> 10% win chance
-        // Force(3) vs Full(5) = -2 -> 30% win chance
-        // Full(5) vs Force(3) = 2 -> 70% win chance
-        let prob = 0.5 + (diff * 0.12); 
-        
-        // Clamp
-        return Math.max(0.15, Math.min(0.85, prob));
-    };
-
-    for (let i = 0; i < roundWinners.length; i++) {
-        const roundNum = i + 1;
-        const isUserCT = roundNum <= 12; // CS2 MR12: Switch at 13
-
-        // --- ECONOMY LOGIC ---
-        const isPistolRound = roundNum === 1 || roundNum === 13;
-
-        if (isPistolRound) {
-            usBuy = 'PISTOL';
-            enemyBuy = 'PISTOL';
-            usPrevRoundResult = null; // Reset momentum on half switch
-        } else {
-             // Apply Logic
-             usBuy = determineNextBuy(usBuy, usPrevRoundResult || 'LOSS', false, roundNum, currentScoreUs, currentScoreEnemy);
-             enemyBuy = determineNextBuy(enemyBuy, enemyPrevRoundResult || 'LOSS', false, roundNum, currentScoreEnemy, currentScoreUs);
-        }
-
-        // --- REALISM CHECK & SWAP ---
-        // Calculate probability of "us" winning this round based on economy
-        const usWinProb = getWinProbability(usBuy, enemyBuy);
-        const currentPlannedWinner = roundWinners[i]; // 'us' or 'enemy'
-
-        // If result is highly unlikely (e.g. Eco winning vs Full Buy), try to swap with a future round
-        let finalRoundWinner = currentPlannedWinner;
-        
-        const isUpset = (currentPlannedWinner === 'us' && usWinProb < 0.3) || 
-                        (currentPlannedWinner === 'enemy' && usWinProb > 0.7);
-        
-        if (isUpset) {
-            // Check if we actually get the upset (20% chance to keep the upset)
-            const keepUpset = Math.random() < 0.20; 
-            
-            if (!keepUpset) {
-                // Try to find a future round result that we can swap to make this round "Make Sense"
-                // e.g. If we are meant to WIN but we are ECO, look for a LOSS later to swap here.
-                const desiredWinner = currentPlannedWinner === 'us' ? 'enemy' : 'us';
-                
-                // Look ahead
-                for (let j = i + 1; j < roundWinners.length; j++) {
-                    if (roundWinners[j] === desiredWinner) {
-                        // SWAP
-                        roundWinners[j] = currentPlannedWinner;
-                        roundWinners[i] = desiredWinner;
-                        finalRoundWinner = desiredWinner;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Update Stats for NEXT round
-        usPrevRoundResult = finalRoundWinner === 'us' ? 'WIN' : 'LOSS';
-        enemyPrevRoundResult = finalRoundWinner === 'enemy' ? 'WIN' : 'LOSS';
-
-        // Update Score
-        if (finalRoundWinner === 'us') currentScoreUs++; else currentScoreEnemy++;
-
-        // Generate Kills
-        const roundEvents: KillEvent[] = [];
-        let loserDeaths = Math.floor(Math.random() * 3) + 3; // 3-5
-        let winnerDeaths = Math.floor(Math.random() * 3); // 0-2
-
-        // Adjust deaths based on buy type (Ecos usually get wiped)
-        const loserBuy = finalRoundWinner === 'us' ? enemyBuy : usBuy;
-        if (loserBuy === 'ECO') loserDeaths = Math.min(5, loserDeaths + 1);
-
-        if (finalRoundWinner === 'us') {
-            loserDeaths = Math.min(loserDeaths, enemyDeathDeck.length, usKillDeck.length);
-            winnerDeaths = Math.min(winnerDeaths, usDeathDeck.length, enemyKillDeck.length);
-        } else {
-            loserDeaths = Math.min(loserDeaths, usDeathDeck.length, enemyKillDeck.length);
-            winnerDeaths = Math.min(winnerDeaths, enemyDeathDeck.length, usKillDeck.length);
-        }
-
-        // WEAPON SELECTION LOGIC
-        const getWeapon = (side: 'CT' | 'T', buyType: BuyType, isAwper: boolean): KillEvent['weapon'] => {
-             const rand = Math.random();
-             
-             if (buyType === 'PISTOL') {
-                 if (side === 'CT') return rand > 0.6 ? 'usp' : 'hkp2000';
-                 return rand > 0.7 ? 'tec9' : 'glock';
-             }
-
-             if (buyType === 'ECO') {
-                 if (rand > 0.8) return 'deagle'; // Hero deagle
-                 if (rand > 0.6) return 'p250';
-                 return side === 'CT' ? 'usp' : 'glock';
-             }
-
-             if (buyType === 'FORCE') {
-                 if (rand > 0.7) return 'deagle';
-                 if (rand > 0.5) return 'ssg08'; // Scout
-                 if (side === 'T') return rand > 0.5 ? 'galilar' : 'tec9';
-                 return rand > 0.5 ? 'famas' : 'fiveseven';
-             }
-
-             if (buyType === 'ANTI_ECO') {
-                 // SMGs and lesser rifles
-                 if (side === 'CT') return rand > 0.5 ? 'mp9' : 'm4a1'; // 50% chance to keep bonus weapon
-                 return rand > 0.5 ? 'mac10' : 'galilar';
-             }
-
-             if (buyType === 'FULL_BUY') {
-                 if (isAwper && rand > 0.2) return 'awp';
-                 if (rand > 0.95) return 'hegrenade'; // Rare nade kill
-                 if (rand > 0.98) return 'inferno';
-                 if (side === 'T') return 'ak47';
-                 return rand > 0.5 ? 'm4a1' : 'm4a4';
-             }
-
-             return 'ak47'; // Fallback
-        };
-
-        // HEADSHOT LOGIC
-        const determineHeadshot = (weapon: string): boolean => {
-            if (weapon === 'hegrenade' || weapon === 'inferno' || weapon === 'knife') {
-                return false;
-            }
-            if (weapon === 'awp') {
-                return Math.random() < 0.10; // 10% HS chance for AWP
-            }
-            // Rifles and Pistols
-            return Math.random() < 0.75; // 75% HS chance
-        };
-
-        // 1. WINNER KILLS (Loser Deaths)
-        for (let k = 0; k < loserDeaths; k++) {
-            const killer = finalRoundWinner === 'us' ? usKillDeck.pop() : enemyKillDeck.pop();
-            const victim = finalRoundWinner === 'us' ? enemyDeathDeck.pop() : usDeathDeck.pop();
-            
-            if (killer && victim) {
-                const killerSide = finalRoundWinner === 'us' ? (isUserCT ? 'CT' : 'T') : (isUserCT ? 'T' : 'CT');
-                // Find Killer Role
-                const killerTeam = finalRoundWinner === 'us' ? myTeam : enemyTeam;
-                const playerObj = killerTeam.players.find(p => p.alias === killer);
-                const isAwper = playerObj?.role === PlayerRole.AWPER;
-                const buy = finalRoundWinner === 'us' ? usBuy : enemyBuy;
-                const weapon = getWeapon(killerSide, buy, isAwper);
-
-                roundEvents.push({
-                    killer,
-                    victim,
-                    weapon: weapon,
-                    isHeadshot: determineHeadshot(weapon),
-                    killerSide: killerSide
-                });
-            }
-        }
-
-        // 2. LOSER KILLS (Winner Deaths)
-        for (let k = 0; k < winnerDeaths; k++) {
-            const killer = finalRoundWinner === 'us' ? enemyKillDeck.pop() : usKillDeck.pop();
-            const victim = finalRoundWinner === 'us' ? usDeathDeck.pop() : enemyDeathDeck.pop();
-
-            if (killer && victim) {
-                const killerSide = finalRoundWinner === 'us' ? (isUserCT ? 'T' : 'CT') : (isUserCT ? 'CT' : 'T');
-                const killerTeam = finalRoundWinner === 'us' ? enemyTeam : myTeam;
-                const playerObj = killerTeam.players.find(p => p.alias === killer);
-                const isAwper = playerObj?.role === PlayerRole.AWPER;
-                const buy = finalRoundWinner === 'us' ? enemyBuy : usBuy;
-                const weapon = getWeapon(killerSide, buy, isAwper);
-
-                roundEvents.push({
-                    killer,
-                    victim,
-                    weapon: weapon,
-                    isHeadshot: determineHeadshot(weapon),
-                    killerSide: killerSide
-                });
-            }
-        }
-        
-        // KILLFEED LOGIC FIX: Ensure 5th kill ends the round if it's a wipe
-        if (loserDeaths === 5) {
-            // Identify the winning side string (CT or T)
-            const winningSide = finalRoundWinner === 'us' ? (isUserCT ? 'CT' : 'T') : (isUserCT ? 'T' : 'CT');
-            
-            // Separate the events
-            const winningKills = roundEvents.filter(e => e.killerSide === winningSide);
-            const losingKills = roundEvents.filter(e => e.killerSide !== winningSide);
-            
-            // Take one kill from the winner to be the absolute final blow
-            const finalKill = winningKills.pop();
-            
-            // Shuffle the rest together (all losing kills + winner kills minus the last one)
-            const middleEvents = [...winningKills, ...losingKills].sort(() => Math.random() - 0.5);
-            
-            // Rebuild array: Middle events first, then the final kill
-            roundEvents.length = 0;
-            roundEvents.push(...middleEvents);
-            if (finalKill) roundEvents.push(finalKill);
-        } else {
-            // If not a full team wipe (e.g. bomb explosion, time out, or surviving members), just shuffle normally
-            roundEvents.sort(() => Math.random() - 0.5);
-        }
-
-        // Description Logic based on Economy
-        let desc = "Standard gun round.";
-        if (isPistolRound) desc = "Pistol Round.";
-        else if (usBuy === 'ECO' && enemyBuy === 'ECO') desc = "Chaotic double eco.";
-        else if (usBuy === 'ECO') desc = `${myTeam.name} on Eco.`;
-        else if (enemyBuy === 'ECO') desc = `${enemyTeam.name} on Eco.`;
-        else if (usBuy === 'FORCE' || enemyBuy === 'FORCE') desc = "Force buy skirmish.";
-        else if (usBuy === 'FULL_BUY' && enemyBuy === 'FULL_BUY') desc = "Full Buy execution.";
-        
-        logs.push({
-            roundNumber: roundNum,
-            winner: finalRoundWinner,
-            description: `${finalRoundWinner === 'us' ? myTeam.name : enemyTeam.name} wins. ${desc}`,
-            scoreUs: currentScoreUs,
-            scoreEnemy: currentScoreEnemy,
-            events: roundEvents
-        });
-
-        // SAFETY BREAK
-        if (currentScoreUs === 13 || currentScoreEnemy === 13) break;
-    }
-
-    return logs;
-};
-
-const simulateMatchLocal = (myTeam: Team, enemyTeam: Team, tacticalBonus: number = 0, mapBonus: number = 0): Partial<MatchResult> => {
-    // Calculate Team Strengths
-    const getTeamStrength = (t: Team) => t.players.reduce((acc, p) => acc + (p.stats.aim * 1.2 + p.stats.reflex + p.stats.strategy * 0.8), 0);
-    
-    const myStrength = getTeamStrength(myTeam);
-    const enemyStrength = getTeamStrength(enemyTeam);
-    
-    const totalStrength = myStrength + enemyStrength;
-    
-    // Base probability calculated linearly
-    let myWinProb = (myStrength / totalStrength); // e.g., 0.45 or 0.55
-
-    // --- BALANCING FIX ---
-    // Normalize probability to be closer to 50% for gameplay enjoyment.
-    // If probability is 40%, we want it to feel like 48%. 
-    // If it's 60%, we feel like 52%. 
-    // We push everything towards 0.5 center.
-    
-    const diffFromCenter = myWinProb - 0.5; 
-    // Dampen the difference by 50%
-    myWinProb = 0.5 + (diffFromCenter * 0.5);
-
-    // Add tactical/map bonuses
-    myWinProb += tacticalBonus + mapBonus;
-
-    // --- HARD FLOOR ---
-    // Ensure the user never has less than ~40% chance in a "fair" league match
-    // unless they are severely severely outclassed (which shouldn't happen in same league)
-    if (myWinProb < 0.40) {
-        myWinProb = 0.40 + (Math.random() * 0.05); // Boost to 40-45%
-    }
-
-    // Add variance
-    const variance = (Math.random() * 0.10) - 0.05;
-    myWinProb += variance;
-
-    // Final Clamp
-    const clampedProb = Math.max(0.35, Math.min(0.95, myWinProb));
-
-    const isMyWin = Math.random() < clampedProb;
-    
-    // Generate Score
-    const winnerScore = 13;
-    
-    // Calculate score tightness
-    let loserScore = 0;
-    const skillGap = Math.abs(myStrength - enemyStrength) / Math.max(myStrength, enemyStrength); 
-    
-    if (skillGap < 0.1 || clampedProb > 0.4 && clampedProb < 0.6) {
-        // Very close game if stats are close OR probability was forced to be close
-        loserScore = 9 + Math.floor(Math.random() * 4); // 9 to 12
-    } else {
-        // Wider gap
-        loserScore = 5 + Math.floor(Math.random() * 6); // 5 to 10
-    }
-    
-    // Occasional Overtime Logic (Rare)
-    if (Math.random() > 0.92) {
-        loserScore = 11 + Math.floor(Math.random() * 2); // 11-12
-    }
-
-    const finalScoreUs = isMyWin ? winnerScore : loserScore;
-    const finalScoreEnemy = isMyWin ? loserScore : winnerScore;
-    
-    // MVP
-    const winningTeam = isMyWin ? myTeam : enemyTeam;
-    const sortedPlayers = [...winningTeam.players].sort((a,b) => b.stats.aim - a.stats.aim);
-    const mvp = Math.random() > 0.5 ? sortedPlayers[0] : sortedPlayers[Math.floor(Math.random() * winningTeam.players.length)];
-
-    return {
-        finalScoreUs,
-        finalScoreEnemy,
-        mvpAlias: mvp.alias,
-        summary: isMyWin 
-            ? `A hard fought victory against ${enemyTeam.name}. The team showed great resilience.` 
-            : `A tough loss against ${enemyTeam.name}. We need to improve our strategy.`,
-        earnings: isMyWin ? 10000 : 3500,
-        // Logs are generated later in simulateMatch wrapper to ensure consistency
-        logs: [] 
-    };
-};
-
-const analyzeMatchupFallback = (myTeam: Team, opponent: Team): OpponentAnalysis => {
-     const myAvg = myTeam.players.reduce((a,b) => a + b.stats.aim, 0) / 5;
-     const oppAvg = opponent.players.reduce((a,b) => a + b.stats.aim, 0) / 5;
-     
-     const diff = myAvg - oppAvg;
-     // More forgiving analysis calculation
-     // If stats are equal, 50%. If -5 diff, it used to be 40%, now make it 45%.
-     let winProb = 50 + (diff * 1.5); 
-     
-     // Clamp visual probability to friendly numbers
-     winProb = Math.max(40, Math.min(85, winProb));
-
-     // Find opponent's best/worst maps locally
-     let bestMap = "Mirage";
-     let bestMapVal = 0;
-     let worstMap = "Nuke";
-     let worstMapVal = 100;
-
-     if (opponent.mapStats) {
-         Object.entries(opponent.mapStats).forEach(([k, v]) => {
-             if (v > bestMapVal) { bestMap = k; bestMapVal = v; }
-             if (v < worstMapVal) { worstMap = k; worstMapVal = v; }
-         });
-     }
-
-     return {
-         overview: `Local Analysis: A ${Math.abs(diff) < 5 ? 'close' : diff > 0 ? 'favorable' : 'challenging'} matchup based on stats.`,
-         keyPlayer: opponent.players.reduce((prev, current) => (prev.stats.aim > current.stats.aim) ? prev : current).alias,
-         keyPlayerReason: "Highest rated aimer on their team.",
-         strengths: ["Raw Aim", "Aggression"],
-         weaknesses: ["Tactical Depth", "Utility Usage"],
-         strategy: "Focus on trading kills and playing safe.",
-         winProbability: Math.round(winProb),
-         bestMap: bestMap,
-         bestMapWinRate: bestMapVal,
-         worstMap: worstMap,
-         worstMapWinRate: worstMapVal
-     };
+export interface RoundState {
+    moneyUs: number;
+    moneyEnemy: number;
+    lossStreakUs: number;
+    lossStreakEnemy: number;
+    scoreUs: number;
+    scoreEnemy: number;
+    logs: MatchLog[];
+    // New Economy Tracking
+    survivingCountUs: number;
+    survivingCountEnemy: number;
+    previousBuyUs: BuyType;
+    previousBuyEnemy: BuyType;
 }
 
-// --- MAIN EXPORTS ---
+// --- LOGIC ENGINE ---
+
+// Buy Logic State Machine
+export const determineBuy = (money: number, roundNum: number, isMatchPoint: boolean, scoreEnemy: number, scoreUs: number): BuyType => {
+    // PISTOL ROUNDS
+    if (roundNum === 1 || roundNum === 13) return 'ECO'; 
+
+    // MUST WIN (Last round of half or match point)
+    if (roundNum === 12 || isMatchPoint || scoreEnemy >= 12) {
+        return money >= COST_FULL_BUY ? 'FULL_BUY' : 'FORCE_BUY';
+    }
+
+    if (money >= COST_FULL_BUY) return 'FULL_BUY';
+    
+    if (money >= 8000) {
+        const isDesperate = scoreEnemy > 10 || (scoreEnemy - scoreUs > 4);
+        if (isDesperate) return 'FORCE_BUY';
+        return 'SEMI_ECO';
+    }
+
+    return 'ECO';
+};
+
+// Firepower Multiplier based on Buy Type
+const getBuyPower = (buy: BuyType): number => {
+    switch (buy) {
+        case 'FULL_BUY': return 1.0;
+        case 'FORCE_BUY': return 0.65;
+        case 'SEMI_ECO': return 0.35;
+        case 'ECO': return 0.15;
+        default: return 0.5;
+    }
+};
+
+// Deduct money based on buy, accounting for survivors
+const spendMoney = (state: RoundState, buyUs: BuyType, buyEnemy: BuyType) => {
+    
+    const calculateCost = (buy: BuyType, currentMoney: number, survivors: number, prevBuy: BuyType) => {
+        let baseCost = 0;
+        if (buy === 'FULL_BUY') baseCost = COST_FULL_BUY;
+        else if (buy === 'FORCE_BUY') baseCost = COST_FORCE_BUY;
+        else if (buy === 'SEMI_ECO') baseCost = COST_SEMI_ECO;
+        else return 0;
+
+        // DISCOUNTS FOR SURVIVORS
+        // Only apply discount if we are buying similar or better tier
+        let discount = 0;
+        if (prevBuy === 'FULL_BUY' && buy === 'FULL_BUY') {
+            discount = survivors * VALUE_SAVED_FULL;
+        } else if (prevBuy === 'FORCE_BUY' && (buy === 'FORCE_BUY' || buy === 'FULL_BUY')) {
+            discount = survivors * VALUE_SAVED_FORCE;
+        }
+
+        // Determine actual cost, ensuring we don't go negative cost (though unlikely)
+        // Min cost represents utility replenishment for survivors
+        const finalCost = Math.max(survivors * 600, baseCost - discount);
+        
+        return Math.min(currentMoney, finalCost);
+    };
+
+    const costUs = calculateCost(buyUs, state.moneyUs, state.survivingCountUs, state.previousBuyUs);
+    const costEnemy = calculateCost(buyEnemy, state.moneyEnemy, state.survivingCountEnemy, state.previousBuyEnemy);
+
+    state.moneyUs = Math.max(0, state.moneyUs - costUs);
+    state.moneyEnemy = Math.max(0, state.moneyEnemy - costEnemy);
+
+    // Update History for next round logic
+    state.previousBuyUs = buyUs;
+    state.previousBuyEnemy = buyEnemy;
+};
+
+// Tactical Rock-Paper-Scissors
+const getTacticalBonus = (myTactic: Tactic, enemyTactic: Tactic): number => {
+    if (myTactic === enemyTactic) return 0;
+    if (myTactic === Tactic.AGGRESSIVE) return enemyTactic === Tactic.PASSIVE ? 0.08 : -0.08;
+    if (myTactic === Tactic.PASSIVE) return enemyTactic === Tactic.DEFAULT ? 0.08 : -0.08;
+    if (myTactic === Tactic.DEFAULT) return enemyTactic === Tactic.AGGRESSIVE ? 0.08 : -0.08;
+    return 0;
+};
+
+export const simulateRound = (
+    roundNum: number,
+    state: RoundState,
+    usTeam: Team,
+    enemyTeam: Team,
+    usTactic: Tactic,
+    enemyTactic: Tactic,
+    mapId: string,
+    moraleBoostUs: number = 0 // NEW: Manager intervention boost
+): KillEvent[] => {
+    const isPistol = roundNum === 1 || roundNum === 13;
+    const isMatchPointUs = state.scoreUs === 12;
+    const isMatchPointEnemy = state.scoreEnemy === 12;
+
+    // 1. Determine Buys
+    let buyUs = determineBuy(state.moneyUs, roundNum, isMatchPointEnemy, state.scoreEnemy, state.scoreUs);
+    let buyEnemy = determineBuy(state.moneyEnemy, roundNum, isMatchPointUs, state.scoreUs, state.scoreEnemy);
+
+    // Pistol Override
+    if (isPistol) {
+        buyUs = 'ECO';
+        buyEnemy = 'ECO';
+        // Reset survivor counts on pistol rounds (halves or start)
+        state.survivingCountUs = 0;
+        state.survivingCountEnemy = 0;
+    }
+
+    // 2. Deduct Spending (Logic now handles discounts)
+    spendMoney(state, buyUs, buyEnemy);
+
+    // 3. Calculate Team Strengths
+    const getSkill = (t: Team) => t.players.reduce((acc, p) => acc + (p.stats.aim * 1.2 + p.stats.reflex + p.stats.teamwork), 0);
+    const skillUs = getSkill(usTeam);
+    const skillEnemy = getSkill(enemyTeam);
+
+    const equipUs = getBuyPower(buyUs);
+    const equipEnemy = getBuyPower(buyEnemy);
+
+    const masteryUs = (usTeam.mapStats?.[mapId] || 0) / 1000;
+    const masteryEnemy = (enemyTeam.mapStats?.[mapId] || 0) / 1000;
+
+    const tacticBonus = getTacticalBonus(usTactic, enemyTactic);
+
+    const utilUs = usTeam.players.reduce((a,b) => a + b.stats.utility, 0) / 500;
+    const utilEnemy = enemyTeam.players.reduce((a,b) => a + b.stats.utility, 0) / 500;
+
+    // FINAL CALCULATION
+    const totalSkill = skillUs + skillEnemy;
+    const skillFactor = (skillUs - skillEnemy) / totalSkill;
+
+    let winChanceUs = 0.5;
+    
+    if (isPistol) {
+        winChanceUs += skillFactor * 1.5;
+        winChanceUs += (masteryUs - masteryEnemy);
+    } else {
+        const equipFactor = (equipUs - equipEnemy) * 0.45; 
+        winChanceUs += skillFactor;
+        winChanceUs += equipFactor;
+        winChanceUs += (masteryUs - masteryEnemy);
+        winChanceUs += tacticBonus;
+        winChanceUs += (utilUs - utilEnemy) * 0.1;
+    }
+    
+    // Apply Manager Boost
+    winChanceUs += moraleBoostUs;
+
+    winChanceUs = Math.max(0.10, Math.min(0.90, winChanceUs));
+    const usWins = Math.random() < winChanceUs;
+
+    // --- KILL GENERATION (SEQUENTIAL LOGIC) ---
+    const events: KillEvent[] = [];
+    
+    const getKillReward = (weapon: string) => {
+        if (['knife', 'zeus'].includes(weapon)) return 1500;
+        if (['awp'].includes(weapon)) return 100;
+        if (['mac10', 'mp9', 'ump45', 'xm1014'].includes(weapon)) return 600;
+        return 300;
+    };
+
+    const usSide = roundNum <= 12 ? 'CT' : 'T';
+    const enemySide = usSide === 'CT' ? 'T' : 'CT';
+
+    const winnerTeam = usWins ? usTeam : enemyTeam;
+    const loserTeam = usWins ? enemyTeam : usTeam;
+    const winnerSide = usWins ? usSide : enemySide;
+    const loserSide = usWins ? enemySide : usSide;
+    const winnerBuy = usWins ? buyUs : buyEnemy;
+    const loserBuy = usWins ? buyEnemy : buyUs;
+
+    let aliveWinner = [...winnerTeam.players];
+    let aliveLoser = [...loserTeam.players];
+
+    const winnerDeaths = Math.floor(Math.random() * 4); 
+    
+    let loserDeaths = Math.floor(Math.random() * 3) + 3;
+    if (loserBuy === 'ECO' && winnerBuy === 'FULL_BUY') loserDeaths = 5;
+    if (loserDeaths > 5) loserDeaths = 5;
+
+    let eventQueue: ('W' | 'L')[] = []; 
+    for(let i=0; i<winnerDeaths; i++) eventQueue.push('W');
+    for(let i=0; i<loserDeaths; i++) eventQueue.push('L');
+    
+    eventQueue = eventQueue.sort(() => Math.random() - 0.5);
+
+    for (const victimType of eventQueue) {
+        if (aliveWinner.length === 0 || aliveLoser.length === 0) break;
+
+        let killer: Player;
+        let victim: Player;
+        let killerSideStr: 'CT' | 'T';
+        let killerBuyType: BuyType;
+
+        if (victimType === 'L') {
+            const victimIdx = Math.floor(Math.random() * aliveLoser.length);
+            victim = aliveLoser.splice(victimIdx, 1)[0]; 
+
+            killer = aliveWinner[Math.floor(Math.random() * aliveWinner.length)]; 
+            killerSideStr = winnerSide;
+            killerBuyType = winnerBuy;
+        } else {
+            const victimIdx = Math.floor(Math.random() * aliveWinner.length);
+            victim = aliveWinner.splice(victimIdx, 1)[0]; 
+
+            killer = aliveLoser[Math.floor(Math.random() * aliveLoser.length)]; 
+            killerSideStr = loserSide;
+            killerBuyType = loserBuy;
+        }
+
+        const weapon = getWeapon(killerBuyType, killer.role, killerSideStr);
+        const reward = getKillReward(weapon);
+
+        // Credit Money immediately
+        if (usTeam.players.some(p => p.id === killer.id)) {
+            state.moneyUs += reward;
+        } else {
+            state.moneyEnemy += reward;
+        }
+
+        events.push({
+            killer: killer.alias,
+            victim: victim.alias,
+            weapon: weapon,
+            isHeadshot: determineHeadshot(weapon),
+            killerSide: killerSideStr
+        });
+    }
+
+    // --- UPDATE SURVIVORS FOR NEXT ROUND ---
+    // Note: We use aliveWinner.length and aliveLoser.length
+    if (usWins) {
+        state.survivingCountUs = aliveWinner.length;
+        state.survivingCountEnemy = aliveLoser.length;
+    } else {
+        state.survivingCountUs = aliveLoser.length;
+        state.survivingCountEnemy = aliveWinner.length;
+    }
+
+    // --- UPDATE ECONOMY (ROUND END) ---
+    if (usWins) {
+        state.scoreUs++;
+        state.moneyUs = Math.min(MAX_TEAM_MONEY, state.moneyUs + (WIN_BONUS * TEAM_SIZE) + (BOMB_BONUS * TEAM_SIZE));
+        state.lossStreakUs = 0;
+
+        // Enemy Loss
+        let bonus = BASE_LOSS_BONUS + (state.lossStreakEnemy * LOSS_BONUS_STEP);
+        if (bonus > MAX_LOSS_BONUS) bonus = MAX_LOSS_BONUS;
+        state.moneyEnemy = Math.min(MAX_TEAM_MONEY, state.moneyEnemy + (bonus * TEAM_SIZE));
+        state.lossStreakEnemy++;
+    } else {
+        state.scoreEnemy++;
+        state.moneyEnemy = Math.min(MAX_TEAM_MONEY, state.moneyEnemy + (WIN_BONUS * TEAM_SIZE) + (BOMB_BONUS * TEAM_SIZE));
+        state.lossStreakEnemy = 0;
+
+        // Us Loss
+        let bonus = BASE_LOSS_BONUS + (state.lossStreakUs * LOSS_BONUS_STEP);
+        if (bonus > MAX_LOSS_BONUS) bonus = MAX_LOSS_BONUS;
+        state.moneyUs = Math.min(MAX_TEAM_MONEY, state.moneyUs + (bonus * TEAM_SIZE));
+        state.lossStreakUs++;
+    }
+    
+    return events;
+};
+
+const getWeapon = (buy: BuyType, role: PlayerRole, side: 'CT' | 'T'): KillEvent['weapon'] => {
+    const rand = Math.random();
+    
+    if (buy === 'ECO') {
+        if (rand > 0.8) return 'deagle';
+        if (side === 'CT') return rand > 0.5 ? 'usp' : 'p250';
+        return rand > 0.5 ? 'glock' : 'p250';
+    }
+    
+    if (buy === 'FORCE_BUY') {
+        if (rand > 0.5) return side === 'CT' ? 'mp9' : 'mac10';
+        if (rand > 0.3) return 'deagle';
+        if (rand > 0.2) return 'ssg08';
+        if (side === 'T') return 'galilar';
+        return 'famas';
+    }
+
+    if (buy === 'SEMI_ECO') {
+         if (rand > 0.4) return 'deagle';
+         return 'p250';
+    }
+
+    // FULL BUY
+    if (role === PlayerRole.AWPER && rand > 0.1) return 'awp';
+    
+    if (rand > 0.96) return 'hegrenade';
+    if (rand > 0.98) return 'inferno';
+    
+    if (side === 'T') return 'ak47';
+    return rand > 0.4 ? 'm4a1' : 'm4a4';
+};
+
+const determineHeadshot = (weapon: string): boolean => {
+    if (['hegrenade', 'inferno', 'knife'].includes(weapon)) return false;
+    if (weapon === 'awp') return Math.random() < 0.10;
+    if (['ak47', 'm4a4', 'm4a1', 'galilar', 'famas'].includes(weapon)) return Math.random() < 0.55;
+    return Math.random() < 0.40;
+};
+
+// --- GENERATORS & ANALYSIS ---
 
 export const generateFreeAgents = async (count: number, budget: number): Promise<Player[]> => {
   const ai = getAiClient();
@@ -530,9 +374,10 @@ export const generateFreeAgents = async (count: number, budget: number): Promise
             reflex: { type: Type.INTEGER },
             strategy: { type: Type.INTEGER },
             utility: { type: Type.INTEGER },
+            teamwork: { type: Type.INTEGER },
             clutch: { type: Type.INTEGER },
           },
-          required: ['aim', 'reflex', 'strategy', 'utility', 'clutch']
+          required: ['aim', 'reflex', 'strategy', 'utility', 'teamwork', 'clutch']
         }
       },
       required: ['alias', 'fullName', 'age', 'country', 'role', 'marketValue', 'salary', 'stats']
@@ -562,45 +407,18 @@ export const generateFreeAgents = async (count: number, budget: number): Promise
       id: crypto.randomUUID(),
       avatarSeed: p.alias,
       morale: 50 + Math.floor(Math.random() * 40),
+      xp: { aim: 0, reflex: 0, strategy: 0, clutch: 0, utility: 0, teamwork: 0 },
       matchHistory: []
     }));
   } catch (error) {
     console.warn("Gemini API Error generating agents, using fallback:", error);
-    // Fallback
-    return Array.from({ length: count }).map(() => generateRandomPlayerLocal(budget * 0.2));
+    return []; 
   }
-};
-
-const getTeamContext = (team: Team): string => {
-  const avgStats = team.players.reduce((acc, p) => {
-    return acc + (p.stats.aim + p.stats.reflex + p.stats.strategy + p.stats.utility + p.stats.clutch) / 5;
-  }, 0) / (team.players.length || 1);
-
-  const rosterList = team.players.map(p => {
-    return `- ${p.alias} (${p.country}, ${p.role}): OVR ${Math.round((p.stats.aim + p.stats.reflex + p.stats.strategy)/3)}`;
-  }).join('\n');
-
-  let mapStatsStr = "Map Proficiency:\n";
-  if (team.mapStats) {
-      Object.entries(team.mapStats).forEach(([map, val]) => {
-          mapStatsStr += `${map}: ${val}%\n`;
-      });
-  }
-
-  return `
-  Team Name: ${team.name}
-  Average Team Rating: ${avgStats.toFixed(1)} / 100
-  Roster:
-  ${rosterList}
-  ${mapStatsStr}
-  `;
 };
 
 export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<OpponentAnalysis> => {
     const ai = getAiClient();
-    const myTeamContext = getTeamContext(myTeam);
-    const opponentContext = getTeamContext(opponent);
-  
+    
     const analysisSchema: Schema = {
       type: Type.OBJECT,
       properties: {
@@ -619,22 +437,7 @@ export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<Oppo
       required: ['overview', 'keyPlayer', 'keyPlayerReason', 'strengths', 'weaknesses', 'strategy', 'winProbability', 'bestMap', 'bestMapWinRate', 'worstMap', 'worstMapWinRate']
     };
   
-    const prompt = `
-      Analyze the upcoming Counter-Strike match between these two teams.
-      
-      MY TEAM:
-      ${myTeamContext}
-      
-      OPPONENT TEAM:
-      ${opponentContext}
-      
-      Provide a tactical analysis report. 
-      1. Identify the opponent's biggest threat (key player).
-      2. List 2 of their tactical strengths and 2 weaknesses based on their stats.
-      3. Suggest a counter-strategy.
-      4. Estimate my team's win probability (0-100%).
-      5. Based on the Opponent's Map Stats provided in context, identify their single BEST map and single WORST map and their win rates on them.
-    `;
+    const prompt = `Analyze CS2 match: ${myTeam.name} vs ${opponent.name}. Return JSON.`;
   
     try {
       const response = await ai.models.generateContent({
@@ -648,271 +451,18 @@ export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<Oppo
   
       return JSON.parse(response.text || "{}") as OpponentAnalysis;
     } catch (error) {
-      console.warn("Gemini API Error analyzing matchup, using fallback:", error);
-      return analyzeMatchupFallback(myTeam, opponent);
+       return {
+         overview: "Gemini unavailable. Analysis based on raw stats.",
+         keyPlayer: opponent.players[0].alias,
+         keyPlayerReason: "Top rated player.",
+         strengths: ["Aim"],
+         weaknesses: ["Economy"],
+         strategy: "Play Default",
+         winProbability: 50,
+         bestMap: "Mirage",
+         bestMapWinRate: 60,
+         worstMap: "Nuke",
+         worstMapWinRate: 40
+       };
     }
-};
-
-// --- LOCAL STATS GENERATION ---
-
-const calculateDerivedStats = (stats: PlayerMatchStats[], totalRounds: number) => {
-  stats.forEach(s => {
-      if (s.assists === undefined || s.assists === 0) s.assists = Math.floor(Math.random() * 5); 
-
-      const killDmg = s.kills * 82;
-      const assistDmg = s.assists * 40;
-      const tagDmg = (totalRounds - s.kills) * (Math.random() * 12); 
-      
-      let calculatedAdr = (killDmg + assistDmg + tagDmg) / (totalRounds || 1);
-      calculatedAdr = Math.max(40, Math.min(130, calculatedAdr)); 
-      s.adr = calculatedAdr;
-
-      const survivedRounds = Math.max(0, totalRounds - s.deaths);
-      const impactFactor = (s.kills + s.assists) / (totalRounds || 1);
-      const usefulDeathChance = 0.20 + (impactFactor * 0.4); 
-      const usefulDeaths = Math.floor(s.deaths * Math.min(0.9, usefulDeathChance));
-      
-      const kastRounds = survivedRounds + usefulDeaths;
-      s.kast = Math.min(100, (kastRounds / (totalRounds || 1)) * 100);
-      s.kast = Math.max(45, s.kast); 
-
-      const kpr = s.kills / (totalRounds || 1);
-      const dpr = s.deaths / (totalRounds || 1);
-      
-      const killRating = kpr / 0.67; 
-      const survivalRating = (1 - dpr) / 0.33;
-      const impactRating = ((kpr * 1.3) + (s.assists/(totalRounds||1) * 0.4)); 
-      
-      let rating = (killRating * 0.45) + (survivalRating * 0.2) + (impactRating * 0.25) + ((s.kast/100) * 0.1);
-      s.rating = Math.max(0.35, Math.min(2.6, rating));
-  });
-};
-
-const calculateMatchStats = (team: Team, scoreFor: number, scoreAgainst: number): PlayerMatchStats[] => {
-    const totalRounds = scoreFor + scoreAgainst;
-    const totalSkill = team.players.reduce((sum, p) => 
-        sum + p.stats.aim * 1.5 + p.stats.reflex + p.stats.clutch * 0.5 + (p.morale / 10), 0);
-    
-    const killShares = team.players.map(p => {
-        const skill = p.stats.aim * 1.5 + p.stats.reflex + p.stats.clutch * 0.5 + (p.morale / 10);
-        return { player: p, share: (skill / totalSkill) * (0.85 + Math.random() * 0.3) };
-    });
-
-    const baseKills = (scoreFor * 5) + (scoreAgainst * 2.5); 
-    const variance = Math.floor(Math.random() * 10) - 5;
-    let totalKills = Math.max(5, baseKills + variance);
-
-    const totalKillShare = killShares.reduce((sum, s) => sum + s.share, 0);
-    
-    const stats: PlayerMatchStats[] = killShares.map(({ player, share }) => {
-        return {
-            alias: player.alias,
-            country: player.country,
-            kills: Math.round(totalKills * (share / totalKillShare)),
-            deaths: 0, // Filled later based on opponent kills
-            assists: 0, 
-            adr: 0,
-            kast: 0,
-            rating: 0
-        };
-    });
-
-    const deathWeights = team.players.map(p => {
-        let roleFactor = 1.0;
-        if (p.role === PlayerRole.ENTRY) roleFactor = 1.4; 
-        if (p.role === PlayerRole.AWPER) roleFactor = 0.7; 
-        if (p.role === PlayerRole.LURKER) roleFactor = 0.8;
-        if (p.role === PlayerRole.SUPPORT) roleFactor = 1.1;
-
-        const survivalSkill = p.stats.strategy * 1.0 + p.stats.reflex * 0.5;
-        const baseWeight = (200 - survivalSkill) * roleFactor;
-        return { alias: p.alias, weight: Math.max(10, baseWeight * (0.8 + Math.random() * 0.4)) };
-    });
-
-    const totalWeight = deathWeights.reduce((s, w) => s + w.weight, 0);
-    const approxTotalDeaths = (scoreAgainst * 5) + (scoreFor * 2); 
-
-    stats.forEach(s => {
-        const w = deathWeights.find(dw => dw.alias === s.alias)!;
-        s.deaths = Math.round(approxTotalDeaths * (w.weight / totalWeight));
-        if (s.deaths > totalRounds) s.deaths = totalRounds;
-    });
-
-    calculateDerivedStats(stats, totalRounds);
-    return stats;
-};
-
-const reconcileStats = (usStats: PlayerMatchStats[], enemyStats: PlayerMatchStats[], totalRounds: number) => {
-    const usKills = usStats.reduce((a,b) => a+b.kills, 0);
-    const enemyDeaths = enemyStats.reduce((a,b) => a+b.deaths, 0);
-    let diff = usKills - enemyDeaths;
-
-    let indices = Array.from({ length: enemyStats.length }, (_, i) => i);
-
-    while (diff !== 0) {
-        indices.sort(() => Math.random() - 0.5); 
-        let changed = false;
-        
-        for (const i of indices) {
-            if (diff === 0) break;
-            const target = enemyStats[i];
-
-            if (diff > 0) {
-                if (target.deaths < totalRounds) {
-                    target.deaths++;
-                    diff--;
-                    changed = true;
-                }
-            } else {
-                if (target.deaths > 0) {
-                    target.deaths--;
-                    diff++;
-                    changed = true;
-                }
-            }
-        }
-        if (!changed) break; 
-    }
-
-    const enemyKills = enemyStats.reduce((a,b) => a+b.kills, 0);
-    const usDeaths = usStats.reduce((a,b) => a+b.deaths, 0);
-    let diff2 = enemyKills - usDeaths;
-    
-    indices = Array.from({ length: usStats.length }, (_, i) => i);
-
-    while (diff2 !== 0) {
-        indices.sort(() => Math.random() - 0.5);
-        let changed = false;
-
-        for (const i of indices) {
-            if (diff2 === 0) break;
-            const target = usStats[i];
-            
-            if (diff2 > 0) {
-                if (target.deaths < totalRounds) {
-                    target.deaths++;
-                    diff2--;
-                    changed = true;
-                }
-            } else {
-                if (target.deaths > 0) {
-                    target.deaths--;
-                    diff2++;
-                    changed = true;
-                }
-            }
-        }
-        if (!changed) break;
-    }
-
-    calculateDerivedStats(usStats, totalRounds);
-    calculateDerivedStats(enemyStats, totalRounds);
-};
-
-export const simulateMatch = async (myTeam: Team, enemyTeam: Team, matchContext: string = "Practice Match", tacticalBonus: number = 0, mapId?: string): Promise<MatchResult> => {
-  const ai = getAiClient();
-  const myTeamInfo = getTeamContext(myTeam);
-  const enemyTeamInfo = getTeamContext(enemyTeam);
-
-  let mapBonus = 0;
-  let mapContext = "";
-  if (mapId && myTeam.mapStats && enemyTeam.mapStats) {
-      const myProf = myTeam.mapStats[mapId] || 0;
-      const enemyProf = enemyTeam.mapStats[mapId] || 0;
-      mapBonus = ((myProf - enemyProf) / 100) * 0.3;
-      mapContext = `Map Played: ${mapId}. User Proficiency: ${myProf}%, Enemy Proficiency: ${enemyProf}%.`;
-  }
-
-  const matchSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-      finalScoreUs: { type: Type.INTEGER },
-      finalScoreEnemy: { type: Type.INTEGER },
-      mvpAlias: { type: Type.STRING },
-      summary: { type: Type.STRING },
-      earnings: { type: Type.INTEGER }
-    },
-    required: ['finalScoreUs', 'finalScoreEnemy', 'mvpAlias', 'earnings', 'summary']
-  };
-
-  const prompt = `Simulate a Counter-Strike match.
-  CONTEXT: ${matchContext}
-  ${mapContext}
-  TACTICAL: ${tacticalBonus > 0 ? `User Advantage (+${(tacticalBonus*100).toFixed(0)}%)` : "Neutral"}
-
-  MY TEAM (US): ${myTeamInfo}
-  ENEMY TEAM: ${enemyTeamInfo}
-
-  INSTRUCTIONS:
-  1. Decide winner and score (to 13).
-  2. Pick MVP.
-  3. Write short summary.
-  `;
-
-  let result: Partial<MatchResult>;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: matchSchema,
-      }
-    });
-    if (!response.text) throw new Error("No response");
-    result = JSON.parse(response.text);
-  } catch (error) {
-    console.warn("Gemini failed, using local sim:", error);
-    result = simulateMatchLocal(myTeam, enemyTeam, tacticalBonus, mapBonus);
-  }
-  
-  // Force cap at 13 win for MR12 logic safety
-  if (result.finalScoreUs! > 13) result.finalScoreUs = 13;
-  if (result.finalScoreEnemy! > 13) result.finalScoreEnemy = 13;
-
-  // --- STATS & LOGS GENERATION (LOCAL TO ENSURE CONSISTENCY) ---
-  
-  const playerStatsUs = calculateMatchStats(myTeam, result.finalScoreUs!, result.finalScoreEnemy!);
-  const playerStatsEnemy = calculateMatchStats(enemyTeam, result.finalScoreEnemy!, result.finalScoreUs!);
-  reconcileStats(playerStatsUs, playerStatsEnemy, result.finalScoreUs! + result.finalScoreEnemy!);
-
-  // Boost MVP
-  if (result.mvpAlias) {
-      const mvpStats = playerStatsUs.find(p => p.alias === result.mvpAlias) || playerStatsEnemy.find(p => p.alias === result.mvpAlias);
-      if (mvpStats) {
-          mvpStats.rating = Math.max(mvpStats.rating, 1.35);
-          mvpStats.kills = Math.max(mvpStats.kills, 20);
-          if (mvpStats.kills <= mvpStats.deaths) {
-              mvpStats.deaths = Math.max(5, mvpStats.kills - 2);
-          }
-          const totalRounds = result.finalScoreUs! + result.finalScoreEnemy!;
-          const survived = Math.max(0, totalRounds - mvpStats.deaths);
-          const kastRounds = survived + Math.floor(mvpStats.deaths * 0.75);
-          mvpStats.kast = Math.min(100, (kastRounds / totalRounds) * 100);
-      }
-  }
-
-  // Generate Detailed Logs that match the stats exactly
-  const detailedLogs = generateDetailedMatchLogs(
-      result.finalScoreUs!,
-      result.finalScoreEnemy!,
-      playerStatsUs,
-      playerStatsEnemy,
-      myTeam, // Pass full team objects for roles
-      enemyTeam
-  );
-
-  return {
-      enemyTeamName: enemyTeam.name,
-      finalScoreUs: result.finalScoreUs!,
-      finalScoreEnemy: result.finalScoreEnemy!,
-      logs: detailedLogs,
-      mvpAlias: result.mvpAlias!,
-      earnings: result.earnings!,
-      summary: result.summary!,
-      playerStatsUs,
-      playerStatsEnemy,
-      mapPlayed: mapId
-  };
 };

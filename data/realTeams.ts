@@ -1,5 +1,5 @@
 
-import { Team, Player, PlayerRole, League } from '../types';
+import { Team, Player, PlayerRole, League, PlayerStats } from '../types';
 
 // Helper to create player with league-adjusted stats and value
 const createPlayer = (
@@ -32,8 +32,12 @@ const createPlayer = (
       aim: getStat(),
       reflex: getStat(),
       strategy: getStat(),
-      utility: getStat(),
       clutch: getStat(),
+      utility: getStat(), // NEW
+      teamwork: getStat() // NEW
+    },
+    xp: {
+      aim: 0, reflex: 0, strategy: 0, clutch: 0, utility: 0, teamwork: 0
     },
     marketValue: Math.max(500, Math.floor(adjustedValue)),
     salary: Math.max(100, Math.floor(rating * 20 * valueMultiplier)),

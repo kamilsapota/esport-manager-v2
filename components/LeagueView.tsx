@@ -22,8 +22,8 @@ export const LeagueView: React.FC<LeagueViewProps> = ({ myTeam, opponents, round
   return (
     <div className="p-6 w-full max-w-7xl mx-auto">
       <div className="flex items-center gap-4 mb-8">
-          <div className="p-3 bg-cs-blue rounded-lg text-white">
-              <Shield size={32} />
+          <div className="p-3 bg-[#0B1822] border border-gray-700 rounded-lg flex items-center justify-center">
+              <img src="https://d3dwep9z8m8y9r.cloudfront.net/tournaments/2023/10/tournaments-447/logo/42282/conversions/Logo_Esea_Small-webp.webp" alt="ESEA Logo" className="w-12 h-12 object-contain" />
           </div>
           <div>
               <h2 className="text-3xl font-bold text-white">{myTeam.league}</h2>
@@ -119,8 +119,8 @@ export const LeagueView: React.FC<LeagueViewProps> = ({ myTeam, opponents, round
               
               <div className="mt-6 bg-blue-900/20 border border-blue-900/50 p-4 rounded-lg">
                    <h4 className="text-white font-bold mb-1 text-sm">Format</h4>
-                   <p className="text-xs text-gray-400">
-                       Teams play a round-robin format. Top teams promote to the next division. Bottom teams are relegated.
+                   <p className="text-xs text-gray-400 leading-relaxed">
+                       Teams play a round-robin format. Top 8 teams advance to playoffs. Only 1 team wins promotion to the next division.
                    </p>
               </div>
           </div>

@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Tournament, Team, ScheduledMatch } from '../types';
-import { Trophy, Calendar, Play, ChevronLeft, ChevronRight, Swords } from 'lucide-react';
+import { Trophy, Calendar, Play, ChevronLeft, ChevronRight, Swords, Lock } from 'lucide-react';
 
 interface ScheduleViewProps {
   tournaments: Tournament[];
@@ -139,12 +138,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ tournaments, current
                                     <span className="text-xs text-gray-500">Prize: ${(t.prizePool/1000)}k</span>
                                     <span className="text-xs font-mono text-cs-yellow">{daysUntil} days</span>
                                 </div>
-                                {team.players.length === 5 && t.participationStatus === 'none' && daysUntil > 0 && daysUntil < 60 && (
+                                {daysUntil > 0 && (
                                      <button 
-                                        onClick={() => onQualify(t.id)}
-                                        className="w-full mt-2 py-1 bg-gray-800 hover:bg-cs-blue text-xs text-gray-300 hover:text-white rounded transition-colors uppercase font-bold"
+                                        disabled={true}
+                                        className="w-full mt-2 py-1.5 bg-black/40 border border-gray-700 text-xs text-gray-500 rounded cursor-not-allowed uppercase font-bold flex items-center justify-center gap-2 transition-all hover:border-red-900/50 hover:bg-red-900/10"
                                      >
-                                        Enter Qualifier
+                                        <Lock size={10} /> 
+                                        Qualifiers Coming Soon
                                      </button>
                                 )}
                             </div>

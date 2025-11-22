@@ -1,18 +1,20 @@
 
-import React from 'react';
-import { Team, Player, PlayerRole } from '../types';
-import { Trophy, Shield, Swords, Play } from 'lucide-react';
+import React, { useState } from 'react';
+import { Team, Player, PlayerRole, Tactic } from '../types';
+import { Trophy, Shield, Swords, Play, Brain, Zap, Target } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface MatchLobbyProps {
   myTeam: Team;
   opponent: Team;
-  leagueOpponents: Team[]; // Needed to calculate ranks
+  leagueOpponents: Team[]; 
   onStartMatch: () => void;
+  onSetTactic: (tactic: Tactic) => void;
 }
 
-export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, leagueOpponents, onStartMatch }) => {
-  
+export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, leagueOpponents, onStartMatch, onSetTactic }) => {
+  const [selectedTactic, setSelectedTactic] = useState<Tactic>(Tactic.DEFAULT);
+
   // Calculate Rankings
   const allTeams = [myTeam, ...leagueOpponents];
   const sortedTeams = allTeams.sort((a, b) => {
@@ -26,25 +28,21 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, league
   const myRank = getRank(myTeam.id);
   const oppRank = getRank(opponent.id);
 
+  const handleTacticChange = (t: Tactic) => {
+      setSelectedTactic(t);
+      onSetTactic(t);
+  };
+
   const getDisplayRating = (p: Player, isPlayerTeam: boolean) => {
-      // 1. If user team, try to use actual season history
       if (isPlayerTeam && p.matchHistory && p.matchHistory.length > 0) {
           const total = p.matchHistory.reduce((acc, curr) => acc + curr.rating, 0);
           return (total / p.matchHistory.length).toFixed(2);
       }
-      
-      // If user team player hasn't played yet
       if (isPlayerTeam) return "-";
 
-      // 2. AI Team: Calculate synthetic rating based on stats
-      // Mapping: 50 Stat -> 1.00 Rating. 90 Stat -> 1.40 Rating.
       const avgStat = (p.stats.aim + p.stats.reflex + p.stats.strategy + p.stats.utility) / 4;
-      
-      // Formula: 1.00 + (Stat - 50) * 0.01
       let simulatedRating = 1.00 + (avgStat - 50) * 0.01;
-      
-      // Add deterministic noise based on alias so it's consistent for the same player
-      const noise = (p.alias.length % 5) * 0.01; // 0.00 to 0.05
+      const noise = (p.alias.length % 5) * 0.01; 
       if (p.id.charCodeAt(0) % 2 === 0) simulatedRating += noise;
       else simulatedRating -= noise;
 
@@ -68,7 +66,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, league
             </div>
         </div>
 
-        {/* Roster List - Adjusted height to fit 5 players cleanly */}
+        {/* Roster List */}
         <div className="p-4 bg-gray-900/30">
             <table className="w-full border-collapse">
                 <thead>
@@ -117,18 +115,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, league
             </table>
         </div>
         
-        {/* Spacer to push footer down if needed */}
         <div className="flex-1 bg-gray-900/30"></div>
-
-        {/* Team Avg Stats */}
-        <div className="bg-gray-900/80 p-4 border-t border-gray-800 flex justify-between items-center text-xs font-mono text-gray-400">
-             <span>AVG AGE: {(team.players.reduce((a,b) => a + b.age, 0) / 5).toFixed(1)}</span>
-             {isPlayer && (
-                 <span className="text-[10px] uppercase tracking-widest text-gray-600">
-                     Last {myTeam.matchesPlayed} Matches
-                 </span>
-             )}
-        </div>
     </div>
   );
 
@@ -142,6 +129,52 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, league
             <h1 className="text-4xl md:text-6xl font-black text-white italic tracking-tighter drop-shadow-lg">
                 MATCH LOBBY
             </h1>
+        </div>
+
+        {/* Strategy Selector */}
+        <div className="mb-8 shrink-0 flex justify-center">
+            <div className="bg-cs-dark border border-gray-700 rounded-xl p-6 max-w-3xl w-full shadow-xl">
+                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Brain size={16} /> Match Strategy
+                 </h3>
+                 <div className="grid grid-cols-3 gap-4">
+                    <button 
+                        onClick={() => handleTacticChange(Tactic.AGGRESSIVE)}
+                        className={`p-4 rounded-lg border-2 transition-all relative overflow-hidden ${selectedTactic === Tactic.AGGRESSIVE ? 'border-t-red bg-red-900/20' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'}`}
+                    >
+                        <div className="flex flex-col items-center gap-2">
+                            <Zap size={24} className={selectedTactic === Tactic.AGGRESSIVE ? 'text-t-red' : 'text-gray-500'} />
+                            <span className={`font-black uppercase tracking-wide ${selectedTactic === Tactic.AGGRESSIVE ? 'text-white' : 'text-gray-400'}`}>Aggressive</span>
+                        </div>
+                        {selectedTactic === Tactic.AGGRESSIVE && <div className="absolute top-2 right-2 w-2 h-2 bg-t-red rounded-full animate-pulse"></div>}
+                        <div className="text-[10px] text-gray-500 mt-2 text-center">Rushes. Fast pace. Counters Passive.</div>
+                    </button>
+
+                    <button 
+                        onClick={() => handleTacticChange(Tactic.DEFAULT)}
+                        className={`p-4 rounded-lg border-2 transition-all relative overflow-hidden ${selectedTactic === Tactic.DEFAULT ? 'border-cs-yellow bg-yellow-900/20' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'}`}
+                    >
+                        <div className="flex flex-col items-center gap-2">
+                            <Target size={24} className={selectedTactic === Tactic.DEFAULT ? 'text-cs-yellow' : 'text-gray-500'} />
+                            <span className={`font-black uppercase tracking-wide ${selectedTactic === Tactic.DEFAULT ? 'text-white' : 'text-gray-400'}`}>Default</span>
+                        </div>
+                        {selectedTactic === Tactic.DEFAULT && <div className="absolute top-2 right-2 w-2 h-2 bg-cs-yellow rounded-full animate-pulse"></div>}
+                        <div className="text-[10px] text-gray-500 mt-2 text-center">Balanced. Trap plays. Counters Aggro.</div>
+                    </button>
+
+                    <button 
+                        onClick={() => handleTacticChange(Tactic.PASSIVE)}
+                        className={`p-4 rounded-lg border-2 transition-all relative overflow-hidden ${selectedTactic === Tactic.PASSIVE ? 'border-cs-blue bg-blue-900/20' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'}`}
+                    >
+                        <div className="flex flex-col items-center gap-2">
+                            <Shield size={24} className={selectedTactic === Tactic.PASSIVE ? 'text-cs-blue' : 'text-gray-500'} />
+                            <span className={`font-black uppercase tracking-wide ${selectedTactic === Tactic.PASSIVE ? 'text-white' : 'text-gray-400'}`}>Passive</span>
+                        </div>
+                        {selectedTactic === Tactic.PASSIVE && <div className="absolute top-2 right-2 w-2 h-2 bg-cs-blue rounded-full animate-pulse"></div>}
+                        <div className="text-[10px] text-gray-500 mt-2 text-center">Hold angles. Play time. Counters Default.</div>
+                    </button>
+                 </div>
+            </div>
         </div>
 
         {/* Comparison Grid */}
