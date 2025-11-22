@@ -35,7 +35,7 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
         if (turn === 'enemy') {
             const timer = setTimeout(() => {
                 const availableMaps = MAP_POOL.filter(m => !bannedMaps.includes(m.id));
-                let mapToBan;
+                let mapToBan: typeof MAP_POOL[0] | undefined;
 
                 // AI LOGIC 2.0
                 // 1. Always ban Permaban if available
@@ -63,9 +63,12 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
                 // Fallback if something fails
                 if (!mapToBan) mapToBan = availableMaps[0];
 
-                setBannedMaps(prev => [...prev, mapToBan.id]);
-                setActionLog(prev => [`${enemyTeam.name} banned ${mapToBan.name}`, ...prev]);
-                setTurn('user');
+                if (mapToBan) {
+                    const selectedMap = mapToBan; // Capture value for closure
+                    setBannedMaps(prev => [...prev, selectedMap.id]);
+                    setActionLog(prev => [`${enemyTeam.name} banned ${selectedMap.name}`, ...prev]);
+                    setTurn('user');
+                }
 
             }, 1500); // Delay for dramatic effect
             return () => clearTimeout(timer);
