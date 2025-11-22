@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats, Tactic } from './types';
+import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats, Tactic, TrainingIntensity } from './types';
 import { Header } from './components/Header';
 import { PlayerCard } from './components/PlayerCard';
 import { MarketView } from './components/MarketView';
@@ -14,7 +13,7 @@ import { PracticeView, DrillType } from './components/PracticeView';
 import { MapVeto } from './components/MapVeto';
 import { analyzeMatchup, simulateRound } from './services/geminiService';
 import { TEAMS_BY_LEAGUE, generateRoster } from './data/realTeams';
-import { Loader2, AlertTriangle, Trophy, ArrowRight, Scan, Crosshair, ShieldAlert, BrainCircuit, Calendar, Lock, ThumbsUp, ThumbsDown, TrendingUp, Hourglass, CheckCircle, Target, Zap, ArrowUp } from 'lucide-react';
+import { Loader2, AlertTriangle, Trophy, ArrowRight, Scan, Crosshair, ShieldAlert, BrainCircuit, Calendar, Lock, ThumbsUp, ThumbsDown, TrendingUp, Hourglass, CheckCircle, Target, Zap, ArrowUp, Activity } from 'lucide-react';
 
 const EMPTY_TEAM: Team = {
   id: 'temp-id',
@@ -27,7 +26,8 @@ const EMPTY_TEAM: Team = {
   matchesPlayed: 0,
   leaguePoints: 0,
   roundDifference: 0,
-  mapStats: {}
+  mapStats: {},
+  weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM) // Default to Medium all week
 };
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
@@ -42,7 +42,7 @@ const INITIAL_TOURNAMENTS: Tournament[] = [
 ];
 
 type DailyGain = {
-  type: 'map' | 'xp';
+  type: 'map' | 'xp' | 'passive' | 'mental';
   subject: string; 
   stat?: string;
   value: number;
@@ -62,6 +62,9 @@ export default function App() {
       individualDrills: 0 
   });
   
+  // New state to track if the passive morning training has happened for the current day
+  const [isDailyTrainingComplete, setIsDailyTrainingComplete] = useState(false);
+
   const [dailyGains, setDailyGains] = useState<DailyGain[]>([]);
   const [showDaySummary, setShowDaySummary] = useState(false);
 
@@ -76,7 +79,7 @@ export default function App() {
   const [pendingMatchContext, setPendingMatchContext] = useState<{isQualifier: boolean, tournamentId?: string} | null>(null);
 
   // Live Match Props
-  const [liveMatchData, setLiveMatchData] = useState<{enemy: Team, mapId: string, context: string} | null>(null);
+  const [liveMatchData, setLiveMatchData] = useState<{enemy: Team, mapId: string, context: string, fatiguePenalty: number} | null>(null);
 
   useEffect(() => {
     const allLeagueTeams = TEAMS_BY_LEAGUE[myTeam.league];
@@ -175,6 +178,7 @@ export default function App() {
         isMapPoolInitialized: false,
         consecutiveMapTrainCount: 0,
         lastTrainedMapId: undefined,
+        weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM),
         preferredTactic: Tactic.DEFAULT
     });
 
@@ -187,12 +191,126 @@ export default function App() {
     setIsGameStarted(true);
   };
 
+  // --- PASSIVE TRAINING LOGIC ---
+  const processPassiveTraining = () => {
+    // If training already happened today (e.g., before the match), don't run it again.
+    if (isDailyTrainingComplete) return;
+
+    // Convert JS getDay() (0=Sun, 1=Mon) to our Schedule Index (0=Mon, 6=Sun)
+    const dayOfWeek = (currentDate.getDay() + 6) % 7; 
+    const scheduledIntensity = myTeam.weeklySchedule[dayOfWeek];
+    
+    let mentalChange = 0;
+    let baseXp = 0;
+
+    switch (scheduledIntensity) {
+        case TrainingIntensity.REST:
+            mentalChange = 10;
+            baseXp = 0;
+            break;
+        case TrainingIntensity.LIGHT:
+            mentalChange = 5;
+            baseXp = 40; // Very low XP
+            break;
+        case TrainingIntensity.MEDIUM:
+            mentalChange = -5;
+            baseXp = 80; // Medium XP
+            break;
+        case TrainingIntensity.HEAVY:
+            mentalChange = -15;
+            baseXp = 150; // High XP, High Risk
+            break;
+    }
+
+    setMyTeam(prev => {
+        const updatedPlayers = prev.players.map(p => {
+            const player = { ...p };
+            const xp = { ...player.xp };
+            const stats = { ...player.stats };
+
+            // 1. Update Mental
+            player.morale = Math.max(0, Math.min(100, player.morale + mentalChange));
+            
+            // Log Mental Change (only if significant)
+            if (Math.abs(mentalChange) >= 5) {
+                 setDailyGains(g => {
+                     // Don't spam logs, check if we already logged mental for this player
+                     if(!g.some(l => l.type === 'mental' && l.subject === player.alias)) {
+                         return [...g, {
+                             type: 'mental',
+                             subject: player.alias,
+                             stat: 'MENTAL',
+                             value: mentalChange
+                         }]
+                     }
+                     return g;
+                 });
+            }
+
+            // 2. Update XP (Passive)
+            if (baseXp > 0) {
+                 // Randomization: +/- 20%
+                const variance = 0.8 + (Math.random() * 0.4);
+                const xpGain = Math.floor(baseXp * variance);
+
+                // Distribute XP across ALL stats lightly to represent general training
+                const allStats: (keyof typeof stats)[] = ['aim', 'reflex', 'strategy', 'utility', 'teamwork', 'clutch'];
+                
+                // Give a small portion of XP to 3 random stats
+                for(let i=0; i<3; i++) {
+                    const randomStat = allStats[Math.floor(Math.random() * allStats.length)];
+                    const portion = Math.floor(xpGain / 3);
+
+                    if (stats[randomStat] < 99) {
+                        xp[randomStat] += portion;
+                        
+                        // Level Up Check
+                        let req = 500 + (stats[randomStat] * 50);
+                        while (xp[randomStat] >= req && stats[randomStat] < 99) {
+                            xp[randomStat] -= req;
+                            stats[randomStat] += 1;
+                            req = 500 + (stats[randomStat] * 50);
+                        }
+                    }
+                }
+                
+                setDailyGains(g => {
+                    if(!g.some(l => l.type === 'passive' && l.subject === player.alias)) {
+                         return [...g, {
+                            type: 'passive',
+                            subject: player.alias,
+                            stat: 'GENERAL', // Generic label for passive
+                            value: xpGain
+                        }]
+                    }
+                    return g;
+                });
+            }
+
+            player.xp = xp;
+            player.stats = stats;
+            return player;
+        });
+
+        return { ...prev, players: updatedPlayers };
+    });
+
+    // Mark training as complete for the day
+    setIsDailyTrainingComplete(true);
+  };
+
   const advanceDay = (days: number = 1) => {
     if (isMatchDay) {
-        setErrorMessage("It's Match Day! You must play your scheduled match.");
+        setErrorMessage("It's Match Day! You must play your scheduled match before advancing.");
         setTimeout(() => setErrorMessage(null), 3000);
         return;
     }
+    
+    // Logic: Non-match days run training on advance.
+    // Match days run training BEFORE the match start.
+    // processPassiveTraining handles the "already ran" check internally.
+    processPassiveTraining();
+    
     setShowDaySummary(true);
   };
 
@@ -200,6 +318,9 @@ export default function App() {
       setShowDaySummary(false);
       setDailyGains([]); 
       setDailyActivities({ mapTraining: false, individualDrills: 0 });
+      
+      // Reset the training flag for the new day
+      setIsDailyTrainingComplete(false);
       
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() + 1);
@@ -342,8 +463,12 @@ export default function App() {
               applyXp(config.main, mainGain);
               applyXp(config.sub, subGain);
 
+              // Handle Mental impact of drills
+              // Scrim adds mental, others slightly drain
               if (drillType === 'SCRIM') {
-                  player.morale = Math.min(100, player.morale + 2);
+                  player.morale = Math.min(100, player.morale + 5);
+              } else {
+                  player.morale = Math.max(0, player.morale - 2);
               }
 
               player.stats = stats;
@@ -356,6 +481,14 @@ export default function App() {
       });
 
       setDailyActivities(prev => ({ ...prev, individualDrills: prev.individualDrills + 1 }));
+  };
+
+  const handleUpdateSchedule = (dayIndex: number, intensity: TrainingIntensity) => {
+      setMyTeam(prev => {
+          const newSchedule = [...prev.weeklySchedule];
+          newSchedule[dayIndex] = intensity;
+          return { ...prev, weeklySchedule: newSchedule };
+      });
   };
 
   const handleInitialMapSetup = (permaban: string, firstPick: string, focusMaps: string[]) => {
@@ -438,6 +571,12 @@ export default function App() {
          return; 
       }
       
+      // CRITICAL: Execute morning training BEFORE entering the match context
+      // This ensures mental fatigue/buffs from the schedule are applied for the match
+      if (!isDailyTrainingComplete) {
+          processPassiveTraining();
+      }
+
       setPendingMatchContext({ isQualifier, tournamentId });
       setView(GameView.MAP_VETO);
   }
@@ -457,8 +596,21 @@ export default function App() {
       if (tourney) context = `Qualifier Match for ${tourney.name}`;
     }
 
+    // Calculate Fatigue Penalty based on TODAY'S schedule intensity
+    // Convert JS getDay() (0=Sun) to our Schedule Index (0=Mon)
+    const dayOfWeek = (currentDate.getDay() + 6) % 7; 
+    const intensity = myTeam.weeklySchedule[dayOfWeek];
+    let fatiguePenalty = 0;
+
+    if (intensity === TrainingIntensity.HEAVY) {
+        fatiguePenalty = 0.20; // 20% Penalty for Heavy on Match Day
+    } else if (intensity === TrainingIntensity.MEDIUM) {
+        fatiguePenalty = 0.10; // 10% Penalty for Medium on Match Day
+    }
+    // Light & Rest have 0% penalty
+
     // Instead of running logic here, we prepare data for MatchView
-    setLiveMatchData({ enemy, mapId, context });
+    setLiveMatchData({ enemy, mapId, context, fatiguePenalty });
     setMatchState({ isLoading: false, result: null, currentEnemyId: enemy.id });
     setView(GameView.MATCH_LIVE);
   };
@@ -657,17 +809,21 @@ export default function App() {
                                           {getAggregatedGains().map((gain, i) => (
                                               <div key={i} className="bg-gray-900/50 p-3 rounded border border-gray-800 flex items-center justify-between">
                                                   <div className="flex items-center gap-3">
-                                                      <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-xs ${gain.type === 'map' ? 'bg-blue-900/20 text-blue-400' : 'bg-yellow-900/20 text-yellow-400'}`}>
-                                                          {gain.type === 'map' ? 'MAP' : 'XP'}
+                                                      <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-xs 
+                                                        ${gain.type === 'map' ? 'bg-blue-900/20 text-blue-400' : 
+                                                          gain.type === 'passive' ? 'bg-purple-900/20 text-purple-400' :
+                                                          gain.type === 'mental' ? 'bg-pink-900/20 text-pink-400' :
+                                                          'bg-yellow-900/20 text-yellow-400'}`}>
+                                                          {gain.type === 'map' ? 'MAP' : gain.type === 'passive' ? 'PLAN' : gain.type === 'mental' ? 'MIND' : 'XP'}
                                                       </div>
                                                       <div>
                                                           <div className="font-bold text-sm text-white">{gain.subject}</div>
                                                           <div className="text-[10px] text-gray-500 uppercase font-bold">{gain.stat}</div>
                                                       </div>
                                                   </div>
-                                                  <div className="font-mono font-bold text-green-400 flex items-center">
-                                                      <ArrowUp size={12} />
-                                                      {gain.type === 'map' ? gain.value.toFixed(1) + '%' : '+' + gain.value + ' XP'}
+                                                  <div className={`font-mono font-bold flex items-center ${gain.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                      {gain.value > 0 ? <ArrowUp size={12} /> : null}
+                                                      {gain.type === 'map' ? gain.value.toFixed(1) + '%' : (gain.value > 0 ? '+' : '') + gain.value + (gain.type === 'mental' ? '' : ' XP')}
                                                   </div>
                                               </div>
                                           ))}
@@ -757,6 +913,7 @@ export default function App() {
                                     actionLabel="Release"
                                     onAction={handleFirePlayer}
                                     isCompact={true}
+                                    showTeamwork={true}
                                   />
                               ))}
                               {myTeam.players.length < 5 && (
@@ -958,10 +1115,14 @@ export default function App() {
             {view === GameView.PRACTICE && (
                 <PracticeView 
                     team={myTeam} 
+                    schedule={schedule}
+                    currentDate={currentDate}
                     onTrain={handleTraining}
                     onIndividualTrain={handleIndividualTraining}
+                    onUpdateSchedule={handleUpdateSchedule}
                     onSetupComplete={handleInitialMapSetup}
                     dailyActivities={dailyActivities}
+                    isDailyTrainingComplete={isDailyTrainingComplete}
                 />
             )}
 
@@ -989,7 +1150,8 @@ export default function App() {
                     enemyTeam={liveMatchData.enemy}
                     mapId={liveMatchData.mapId}
                     context={liveMatchData.context}
-                    onComplete={handleMatchComplete} 
+                    onComplete={handleMatchComplete}
+                    fatiguePenalty={liveMatchData.fatiguePenalty} 
                 />
             )}
           </div>

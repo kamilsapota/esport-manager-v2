@@ -22,12 +22,19 @@ export enum Tactic {
   PASSIVE = 'Passive'
 }
 
+export enum TrainingIntensity {
+  REST = 'Rest',
+  LIGHT = 'Light',
+  MEDIUM = 'Medium',
+  HEAVY = 'Heavy'
+}
+
 export interface PlayerStats {
   aim: number;
   reflex: number;
   strategy: number;
-  utility: number;  // NEW
-  teamwork: number; // NEW
+  utility: number;
+  teamwork: number;
   clutch: number;
 }
 
@@ -92,6 +99,7 @@ export interface Team {
   firstPickMap?: string;
   lastTrainedMapId?: string;
   consecutiveMapTrainCount?: number;
+  weeklySchedule: TrainingIntensity[]; // Index 0 = Sunday, 1 = Monday, etc.
   
   // Match Strategy
   preferredTactic?: Tactic;

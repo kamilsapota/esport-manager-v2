@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { Player, PlayerRole } from '../types';
-import { User, Crosshair, Brain, Zap, Shield, Activity, Smile } from 'lucide-react';
+import { User, Crosshair, Brain, Zap, Shield, Activity, Smile, Users } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface PlayerCardProps {
@@ -10,9 +11,18 @@ interface PlayerCardProps {
   actionDisabled?: boolean;
   isCompact?: boolean;
   className?: string;
+  showTeamwork?: boolean;
 }
 
-export const PlayerCard: React.FC<PlayerCardProps> = ({ player, actionLabel, onAction, actionDisabled, isCompact, className = '' }) => {
+export const PlayerCard: React.FC<PlayerCardProps> = ({ 
+    player, 
+    actionLabel, 
+    onAction, 
+    actionDisabled, 
+    isCompact, 
+    className = '',
+    showTeamwork = false 
+}) => {
   
   const getRoleColor = (role: PlayerRole) => {
     switch (role) {
@@ -87,15 +97,14 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, actionLabel, onA
         <StatBar label="AIM" value={player.stats.aim} icon={Crosshair} />
         <StatBar label="RFLX" value={player.stats.reflex} icon={Zap} />
         <StatBar label="STRAT" value={player.stats.strategy} icon={Brain} />
+        <StatBar label="UTIL" value={player.stats.utility} icon={Shield} />
         <StatBar label="CLUTCH" value={player.stats.clutch} icon={Activity} />
         
-        {/* Show UTIL only if NOT compact, or if compact but there's space (rare) */}
-        {!isCompact && (
-            <StatBar label="UTIL" value={player.stats.utility} icon={Shield} />
-        )}
-        
-        {/* Mental/Morale Indicator */}
+        {/* Mental & Teamwork Section */}
         <div className="mt-2 pt-2 border-t border-gray-800/50">
+            {showTeamwork && (
+                <StatBar label="TEAM" value={player.stats.teamwork} icon={Users} />
+            )}
             <MentalBar value={player.morale ?? 50} />
         </div>
       </div>

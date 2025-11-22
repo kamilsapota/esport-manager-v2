@@ -1,30 +1,159 @@
 
-import { Team, Player, PlayerRole, League, PlayerStats } from '../types';
+import { Team, Player, PlayerRole, League, PlayerStats, TrainingIntensity } from '../types';
+
+// --- NAME DATABASE ---
+const NAME_DATABASE: Record<string, { first: string[], last: string[] }> = {
+    'US': {
+        first: ['Michael', 'Christopher', 'Matthew', 'Joshua', 'David', 'James', 'Daniel', 'Robert', 'John', 'Joseph', 'Ryan', 'Nicholas', 'Justin', 'William', 'Jonathan', 'Brandon', 'Austin', 'Tyler', 'Zachary', 'Kevin'],
+        last: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin']
+    },
+    'DK': {
+        first: ['Mikkel', 'Frederik', 'Mathias', 'Christian', 'Rasmus', 'Kasper', 'Anders', 'Thomas', 'Mads', 'Lasse', 'Nicklas', 'Martin', 'Simon', 'Tobias', 'Jonas', 'Patrick', 'Søren', 'Daniel', 'Emil', 'Magnus'],
+        last: ['Jensen', 'Nielsen', 'Hansen', 'Pedersen', 'Andersen', 'Christensen', 'Larsen', 'Sørensen', 'Rasmussen', 'Jørgensen', 'Petersen', 'Madsen', 'Kristensen', 'Olsen', 'Thomsen', 'Christiansen', 'Poulsen', 'Johansen', 'Møller', 'Mortensen']
+    },
+    'SE': {
+        first: ['Erik', 'Lars', 'Karl', 'Anders', 'Per', 'Johan', 'Mikael', 'Nils', 'Jan', 'Hans', 'Lennart', 'Olof', 'Gunnar', 'Sven', 'Bo', 'Peter', 'Fredrik', 'Bengt', 'Daniel', 'Gustav'],
+        last: ['Andersson', 'Johansson', 'Karlsson', 'Nilsson', 'Eriksson', 'Larsson', 'Olsson', 'Persson', 'Svensson', 'Gustafsson', 'Pettersson', 'Jonsson', 'Jansson', 'Hansson', 'Bengtsson', 'Jönsson', 'Lindberg', 'Jakobsson', 'Magnusson', 'Olofsson']
+    },
+    'FR': {
+        first: ['Lucas', 'Nathan', 'Enzo', 'Louis', 'Gabriel', 'Jules', 'Mathis', 'Arthur', 'Hugo', 'Raphaël', 'Léo', 'Tom', 'Théo', 'Clément', 'Maxime', 'Alexandre', 'Antoine', 'Nicolas', 'Julien', 'Pierre'],
+        last: ['Martin', 'Bernard', 'Thomas', 'Petit', 'Robert', 'Richard', 'Durand', 'Dubois', 'Moreau', 'Laurent', 'Simon', 'Michel', 'Lefebvre', 'Leroy', 'Roux', 'David', 'Bertrand', 'Morel', 'Fournier', 'Girard']
+    },
+    'BR': {
+        first: ['Gabriel', 'Lucas', 'Matheus', 'Pedro', 'Leonardo', 'Felipe', 'João', 'Vinicius', 'Guilherme', 'Daniel', 'Bruno', 'Rafael', 'Gustavo', 'Eduardo', 'Thiago', 'Luiz', 'Paulo', 'Marcos', 'André', 'Diego'],
+        last: ['Silva', 'Santos', 'Oliveira', 'Souza', 'Rodrigues', 'Ferreira', 'Alves', 'Pereira', 'Lima', 'Gomes', 'Costa', 'Ribeiro', 'Martins', 'Carvalho', 'Almeida', 'Lopes', 'Soares', 'Fernandes', 'Vieira', 'Barbosa']
+    },
+    'RU': {
+        first: ['Alexander', 'Sergey', 'Dmitry', 'Andrey', 'Alexey', 'Maxim', 'Evgeny', 'Vladimir', 'Ivan', 'Mikhail', 'Nikolay', 'Roman', 'Oleg', 'Igor', 'Denis', 'Kirill', 'Anton', 'Pavel', 'Ruslan', 'Artem'],
+        last: ['Ivanov', 'Smirnov', 'Kuznetsov', 'Popov', 'Vasiliev', 'Petrov', 'Sokolov', 'Mikhailov', 'Novikov', 'Fedorov', 'Morozov', 'Volkov', 'Alekseev', 'Lebedev', 'Semenov', 'Egorov', 'Pavlov', 'Kozlov', 'Stepanov', 'Nikolaev']
+    },
+    'PL': {
+        first: ['Jakub', 'Kacper', 'Mateusz', 'Szymon', 'Filip', 'Michał', 'Antoni', 'Wojciech', 'Aleksander', 'Franciszek', 'Mikołaj', 'Adam', 'Stanisław', 'Marcel', 'Wiktor', 'Jan', 'Piotr', 'Krzysztof', 'Tomasz', 'Paweł'],
+        last: ['Nowak', 'Kowalski', 'Wiśniewski', 'Wójcik', 'Kowalczyk', 'Kamiński', 'Lewandowski', 'Zieliński', 'Szymański', 'Woźniak', 'Dąbrowski', 'Kozłowski', 'Jankowski', 'Mazur', 'Wojciechowski', 'Kwiatkowski', 'Krawczyk', 'Kaczmarek', 'Piotrowski', 'Grabowski']
+    },
+    'UA': {
+        first: ['Oleksandr', 'Serhii', 'Volodymyr', 'Mykola', 'Ivan', 'Vasyl', 'Yurii', 'Viktor', 'Andrii', 'Anatolii', 'Oleh', 'Dmytro', 'Ihor', 'Vladyslav', 'Vitalii', 'Ruslan', 'Yevhen', 'Bohdan', 'Maksym', 'Roman'],
+        last: ['Melnyk', 'Shevchenko', 'Kovalenko', 'Bondarenko', 'Boyko', 'Tkachenko', 'Kravchenko', 'Koval', 'Oliynyk', 'Shevchuk', 'Kozak', 'Savchenko', 'Polishchuk', 'Bondar', 'Tkachuk', 'Moroz', 'Lysenko', 'Rudenko', 'Havryliuk', 'Klymenko']
+    },
+    'DE': {
+        first: ['Lukas', 'Leon', 'Luca', 'Finn', 'Jonas', 'Elias', 'Niklas', 'Jan', 'Tim', 'Luis', 'Max', 'Julian', 'Philipp', 'Felix', 'Maximilian', 'Johannes', 'Paul', 'Ben', 'Noah', 'David'],
+        last: ['Müller', 'Schmidt', 'Schneider', 'Fischer', 'Weber', 'Meyer', 'Wagner', 'Becker', 'Schulz', 'Hoffmann', 'Schäfer', 'Koch', 'Bauer', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Neumann', 'Schwarz', 'Zimmermann']
+    },
+    'FI': {
+        first: ['Matti', 'Ville', 'Antti', 'Jukka', 'Mikko', 'Juha', 'Mika', 'Timo', 'Petri', 'Sami', 'Jari', 'Marko', 'Jani', 'Kari', 'Aleksi', 'Teemu', 'Joonas', 'Jesse', 'Eetu', 'Niko'],
+        last: ['Korhonen', 'Virtanen', 'Mäkinen', 'Nieminen', 'Mäkelä', 'Hämäläinen', 'Laine', 'Heikkinen', 'Koskinen', 'Järvinen', 'Lehtonen', 'Lehtinen', 'Saarinen', 'Salminen', 'Heinonen', 'Niemi', 'Heikkilä', 'Kinnunen', 'Salonen', 'Turunen']
+    },
+    'NO': {
+        first: ['Jan', 'Per', 'Bjørn', 'Ole', 'Lars', 'Kjell', 'Knut', 'Arne', 'Svein', 'Tor', 'Geir', 'Terje', 'Thomas', 'Morten', 'Hans', 'Erik', 'Martin', 'Odd', 'Andreas', 'John'],
+        last: ['Hansen', 'Johansen', 'Olsen', 'Larsen', 'Andersen', 'Pedersen', 'Nilsen', 'Kristiansen', 'Jensen', 'Karlsen', 'Johnsen', 'Pettersen', 'Eriksen', 'Berg', 'Haugen', 'Hagen', 'Johannessen', 'Andreassen', 'Jacobsen', 'Halvorsen']
+    },
+    'CN': {
+        first: ['Wei', 'Hao', 'Yi', 'Xin', 'Yang', 'Lei', 'Jun', 'Yong', 'Jian', 'Ming', 'Bo', 'Gang', 'Jie', 'Qiang', 'Ping', 'Liang', 'Dong', 'Jin', 'Hui', 'Chao'],
+        last: ['Li', 'Wang', 'Zhang', 'Liu', 'Chen', 'Yang', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Hu', 'Zhu', 'Gao', 'Lin', 'He', 'Guo', 'Ma', 'Luo']
+    },
+    'AU': {
+        first: ['Oliver', 'William', 'Jack', 'Noah', 'Thomas', 'James', 'Lucas', 'Henry', 'Ethan', 'Mason', 'Liam', 'Alexander', 'Charlie', 'Max', 'Joshua', 'Harrison', 'Lachlan', 'Samuel', 'Hunter', 'Leo'],
+        last: ['Smith', 'Jones', 'Williams', 'Brown', 'Wilson', 'Taylor', 'Johnson', 'White', 'Martin', 'Anderson', 'Thompson', 'Nguyen', 'Thomas', 'Walker', 'Harris', 'Lee', 'Ryan', 'Robinson', 'Kelly', 'King']
+    },
+    'ES': {
+        first: ['Antonio', 'Manuel', 'Jose', 'Francisco', 'David', 'Juan', 'Javier', 'Jose Antonio', 'Daniel', 'Francisco Javier', 'Jose Luis', 'Carlos', 'Alejandro', 'Jesus', 'Miguel', 'Jose Manuel', 'Rafael', 'Miguel Angel', 'Pedro', 'Angel'],
+        last: ['Garcia', 'Gonzalez', 'Rodriguez', 'Fernandez', 'Lopez', 'Martinez', 'Sanchez', 'Perez', 'Gomez', 'Martin', 'Jimenez', 'Ruiz', 'Hernandez', 'Diaz', 'Moreno', 'Muñoz', 'Alvarez', 'Romero', 'Alonso', 'Gutierrez']
+    },
+    'PT': {
+        first: ['João', 'Francisco', 'Santiago', 'Afonso', 'Duarte', 'Tomás', 'Martim', 'Rodrigo', 'Lourenço', 'Gabriel', 'Miguel', 'Tiago', 'Diogo', 'Gonçalo', 'Pedro', 'Rafael', 'Lucas', 'Gustavo', 'Guilherme', 'Dinis'],
+        last: ['Silva', 'Santos', 'Ferreira', 'Pereira', 'Oliveira', 'Costa', 'Rodrigues', 'Martins', 'Jesus', 'Sousa', 'Fernandes', 'Gonçalves', 'Gomes', 'Lopes', 'Marques', 'Alves', 'Almeida', 'Ribeiro', 'Pinto', 'Carvalho']
+    },
+    'CZ': {
+        first: ['Jiří', 'Jan', 'Petr', 'Josef', 'Pavel', 'Jaroslav', 'Martin', 'Tomáš', 'Miroslav', 'František', 'Zdeněk', 'Václav', 'Michal', 'Milan', 'Karel', 'Jakub', 'Lukáš', 'David', 'Vladimír', 'Ladislav'],
+        last: ['Novák', 'Svoboda', 'Novotný', 'Dvořák', 'Černý', 'Procházka', 'Kučera', 'Veselý', 'Horák', 'Němec', 'Marek', 'Pokorný', 'Pospíšil', 'Hájek', 'Jelínek', 'Král', 'Růžička', 'Beneš', 'Fiala', 'Sedláček']
+    },
+    'SK': {
+        first: ['Ján', 'Jozef', 'Peter', 'Martin', 'Michal', 'Marek', 'Tomáš', 'Milan', 'František', 'Miroslav', 'Ladislav', 'Stanislav', 'Pavol', 'Juraj', 'Lukáš', 'Vladimír', 'Richard', 'Róbert', 'Igor', 'Štefan'],
+        last: ['Varga', 'Kováč', 'Nagy', 'Tóth', 'Horváth', 'Baláž', 'Molnár', 'Szabó', 'Novák', 'Kováčik', 'Polák', 'Varga', 'Danko', 'Hudák', 'Gajdoš', 'Oravec', 'Kollár', 'Bielik', 'Krajčí', 'Urban']
+    },
+    'TR': {
+        first: ['Mehmet', 'Mustafa', 'Ahmet', 'Ali', 'Hüseyin', 'Hasan', 'İbrahim', 'İsmail', 'Osman', 'Yusuf', 'Murat', 'Ömer', 'Ramazan', 'Halil', 'Süleyman', 'Abdullah', 'Mahmut', 'Salih', 'Recep', 'Fatih'],
+        last: ['Yılmaz', 'Kaya', 'Demir', 'Çelik', 'Şahin', 'Yıldız', 'Yıldırım', 'Öztürk', 'Aydın', 'Özdemir', 'Arslan', 'Doğan', 'Kılıç', 'Aslan', 'Çetin', 'Kara', 'Koç', 'Kurt', 'Özkan', 'Şimşek']
+    }
+};
+
+// --- NICKNAME DATABASE (Inspired by Dota 2, R6S, etc. - Non-CS Pros) ---
+const PRO_NICKNAMES = [
+    // Dota 2 Legends
+    'Miracle-', 'SumaiL', 'Arteezy', 'Topson', 'Ceb', 'JerAx', 'N0tail', 'YapzOr', 'Nisha',
+    'Puppey', 'KuroKy', 'Gh', 'MinD_ContRoL', 'MATUMBAMAN', 'RAMZES666', 'No[o]ne', 'Solo', 'RodjER', '9pasha',
+    'Somnus', 'fy', 'Chalice', 'xNova', 'Ame', 'Faith_bian', 'y`', 'NothingToSay', 'XinQ', 'Dy',
+    'Paparazi', 'Ori', 'Yang', 'Fade', 'Kaka', 'Sccc', 'kpii', 'Moogy', 'Boboka', 'Chuan',
+    'Burning', 'Ferrari_430', 'LaNm', 'MMY', 'iceiceice', 'Mushi', 'MidOne', 'Abed', 'Armel',
+    'Tims', 'Kuku', 'Raven', '23savage', 'Jabz', 'DJ', 'Moon', 'March', 'QO', 'Febby',
+    'Dubu', 'MP', 'Forev', 'Crit-', 'Fly', 's4', 'AdmiralBulldog', 'Loda', 'Akke', 'EGM',
+    'Dendi', 'XBOCT', 'Funn1k', 'ArtStyle', 'LightOfHeaven', 'Resolut1on', 'ALWAYSWANNAFLY', 'Iceberg', 'GeneRaL', 'V-Tune',
+    'Yatoro', 'TORONTOTOKYO', 'Collapse', 'Mira', 'Miposhka', 'gpk~', 'DM', 'Save-', 'Kingslayer', 'Nightfall',
+    'Epileptick1d', 'Illidan', 'Lil', 'God', 'Silent', 'DkPhobos', 'Fng', 'Mag', 'Vanskor', 'Yoky',
+    
+    // R6S Legends & Pros
+    'Pengu', 'Fabian', 'Goga', 'Joonas', 'Kantoraketti', 'UUNO', 'Canadian', 'Necrox', 'nvK', 'BC',
+    'Yung', 'Geo', 'Beaulo', 'Achieved', 'Merc', 'Chala', 'Pojoman', 'Bosco', 'Rampy', 'ThinkingNade',
+    'Fultz', 'Hotancold', 'Skys', 'Laxing', 'FoxA', 'Retro', 'Shuttle', 'Easilyy', 'Slashug', 'Eclipse',
+    'Nesk', 'Paluh', 'Psycho', 'Kamikaze', 'Julio', 'Muzi', 'Pino', 'p4sh4', 'Alem4o', 'KDS',
+    'Lagonis', 'soulz1', 'Cyber', 'Bullet1', 'Astro', 'cameram4n', 'mav', 'yoona', 'ion', 'live',
+    'Shaiiko', 'Elemzje', 'BriD', 'Renshiro', 'RaFaLe', 'BiBoo', 'Hicks', 'Risze', 'AceeZ', 'korey',
+    'JoyStiCK', 'ShepparD', 'Dan', 'Always', 'Scyther', 'wTg', 'Rask', 'Shockwave', 'Karzheka', 'Amision',
+    'Virtue', 'CTZN', 'Kayak', 'Blurr', 'Doki', 'Kendrew', 'Saves', 'neLo', 'Pie', 'LeonGids',
+    'MeepeY', 'Lack1', 'Ripz', 'Stigi', 'Gomfi', 'SlebbeN', 'HnC', 'Mint', 'Hyper', 'Nyx',
+
+    // Other/Mixed/Short
+    'Ace', 'Zero', 'Hex', 'Flux', 'Vortex', 'Pulse', 'Echo', 'Neon', 'Void', 'Zen',
+    'Rift', 'Nova', 'Arc', 'Dusk', 'Dawn', 'Mist', 'Haze', 'Glow', 'Spark', 'Fame',
+    'Glory', 'Honor', 'Pride', 'Wrath', 'Envy', 'Greed', 'Lust', 'Sloth', 'Omen', 'Sage',
+    'Cipher', 'Link', 'Navi', 'Helix', 'Matrix', 'Neo', 'Morpheus', 'Trinity', 'Tank', 'Dozer',
+    'Sniper', 'Ghost', 'Phantom', 'Spectre', 'Spirit', 'Soul', 'Mind', 'Body', 'Heart', 'Blood',
+    'Sweat', 'Tears', 'Pain', 'Agony', 'Fear', 'Panic', 'Chaos', 'Order', 'Law', 'Rule',
+    'King', 'Queen', 'Jack', 'Ace', 'Joker', 'Bishop', 'Knight', 'Rook', 'Pawn', 'Lord',
+    'Duke', 'Baron', 'Count', 'Prince', 'Slayer', 'Hunter', 'Killer', 'Reaper', 'Death', 'Life',
+    'Sky', 'Earth', 'Wind', 'Fire', 'Water', 'Ice', 'Snow', 'Rain', 'Storm', 'Thunder',
+    'Lightning', 'Cloud', 'Sun', 'Moon', 'Star', 'Comet', 'Planet', 'World', 'Space', 'Time'
+];
+
+// Helper to get a random item from array
+const rnd = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+// Helper to generate a realistic full name
+const generateFullName = (countryCode: string): string => {
+    // Default to US/UK names if country not found in database
+    const db = NAME_DATABASE[countryCode] || NAME_DATABASE['US'];
+    const firstName = rnd(db.first);
+    const lastName = rnd(db.last);
+    return `${firstName} ${lastName}`;
+};
 
 // Helper to create player with league-adjusted stats and value
 const createPlayer = (
   alias: string, 
   country: string, 
   role: PlayerRole, 
-  baseRating: number, // 0-100 scale roughly
+  baseRating: number, 
   valueMultiplier: number,
-  specificRating?: number // Optional override
+  specificRating?: number 
 ): Player => {
   
   // If specificRating is provided, use it as the base, otherwise use team average
   const rating = specificRating || baseRating;
 
-  // Random variance is smaller if specific rating is provided
+  // Random variance
   const variance = specificRating ? 4 : 12; 
   const getStat = () => Math.min(99, Math.max(10, rating + Math.floor(Math.random() * variance - (variance/2))));
 
   // Exponential Value Curve
   const adjustedValue = Math.pow(rating - 35, 3) * 10 * valueMultiplier;
 
+  // Generate Real Full Name
+  const fullName = generateFullName(country);
+
   return {
     id: `p-${alias.toLowerCase().replace(/\s/g, '')}-${Math.random().toString(36).substr(2, 5)}`,
     alias,
-    fullName: alias, // Simplified for generated
+    fullName: fullName, 
     age: 16 + Math.floor(Math.random() * 10),
     country,
     role,
@@ -33,29 +162,27 @@ const createPlayer = (
       reflex: getStat(),
       strategy: getStat(),
       clutch: getStat(),
-      utility: getStat(), // NEW
-      teamwork: getStat() // NEW
+      utility: getStat(), 
+      teamwork: getStat() 
     },
     xp: {
       aim: 0, reflex: 0, strategy: 0, clutch: 0, utility: 0, teamwork: 0
     },
     marketValue: Math.max(500, Math.floor(adjustedValue)),
     salary: Math.max(100, Math.floor(rating * 20 * valueMultiplier)),
-    morale: 75 + Math.floor(Math.random() * 15), // Default morale 75-90
-    matchHistory: [] // Initialize empty history
+    morale: 75 + Math.floor(Math.random() * 15),
+    matchHistory: []
   };
 };
 
 export const generateRoster = (countryCode: string, avgRating: number, multiplier: number): Player[] => {
   const roles = [PlayerRole.IGL, PlayerRole.AWPER, PlayerRole.ENTRY, PlayerRole.SUPPORT, PlayerRole.LURKER];
-  const generatedNames = [
-    'Slayer', 'Phantom', 'K1ng', 'Joker', 'Ghost', 'Viper', 'Neo', 'Dash', 'Blaze', 'Frost',
-    'Shadow', 'Storm', 'Ace', 'Zero', 'N1nja', 'Pixel', 'Glitch', 'Toxic', 'Savage', 'Beast',
-    'Cr1m', 'Duggy', 'FalleN_Jr', 'S1mple_Fan', 'R0cky', 'Bull', 'Shark', 'Eagle', 'Wolf'
-  ];
+  
+  // Shuffle nicknames to ensure uniqueness in this roster
+  const availableNicks = [...PRO_NICKNAMES].sort(() => 0.5 - Math.random());
   
   return roles.map((role, i) => {
-    const alias = `${generatedNames[Math.floor(Math.random() * generatedNames.length)]}_${Math.floor(Math.random()*99)}`;
+    const alias = availableNicks[i];
     return createPlayer(alias, countryCode, role, avgRating, multiplier);
   });
 };
@@ -68,10 +195,11 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
   let players: Player[];
 
   if (realPlayers && realPlayers.length > 0) {
-      // Fill missing roles if any, but usually we provide full 5
       players = realPlayers.map((rp, idx) => {
           const role = rp.role || [PlayerRole.IGL, PlayerRole.AWPER, PlayerRole.ENTRY, PlayerRole.SUPPORT, PlayerRole.LURKER][idx % 5];
-          return createPlayer(rp.alias!, rp.country || country, role, avgRating, multiplier, rp.rating);
+          // If alias is provided in realPlayers, use it. Otherwise random from PRO_NICKNAMES
+          const alias = rp.alias || PRO_NICKNAMES[Math.floor(Math.random() * PRO_NICKNAMES.length)];
+          return createPlayer(alias, rp.country || country, role, avgRating, multiplier, rp.rating);
       });
   } else {
       players = generateRoster(country, avgRating, multiplier);
@@ -114,7 +242,8 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
     roundDifference: 0,
     rankingPoints: Math.floor(avgRating * 10), // Default
     mapStats,
-    permaban: permaban // Assign the worst map as their permaban
+    permaban: permaban, // Assign the worst map as their permaban
+    weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM)
   };
 };
 

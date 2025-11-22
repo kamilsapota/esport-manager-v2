@@ -3,11 +3,9 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Player, MatchResult, Team, PlayerRole, OpponentAnalysis, PlayerMatchStats, MatchLog, KillEvent, Tactic } from '../types';
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key not found in environment variables");
-  }
-  return new GoogleGenAI({ apiKey });
+  // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+  // Use this process.env.API_KEY string directly when initializing the @google/genai client instance.
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 // --- ECONOMY CONSTANTS ---
@@ -142,7 +140,8 @@ export const simulateRound = (
     usTactic: Tactic,
     enemyTactic: Tactic,
     mapId: string,
-    moraleBoostUs: number = 0 // NEW: Manager intervention boost
+    moraleBoostUs: number = 0, // Manager intervention boost
+    fatiguePenaltyUs: number = 0 // NEW: Daily Schedule penalty (0 to 0.2)
 ): KillEvent[] => {
     const isPistol = roundNum === 1 || roundNum === 13 || (roundNum > 24 && (roundNum - 25) % 3 === 0);
     const isMatchPointUs = state.scoreUs === 12;
@@ -165,9 +164,21 @@ export const simulateRound = (
     spendMoney(state, buyUs, buyEnemy);
 
     // 3. Calculate Team Strengths
-    const getSkill = (t: Team) => t.players.reduce((acc, p) => acc + (p.stats.aim * 1.2 + p.stats.reflex + p.stats.teamwork), 0);
-    const skillUs = getSkill(usTeam);
+    // MENTAL FACTOR: Players with < 50 morale suffer 20% performance penalty (Tilt)
+    const getSkill = (t: Team) => t.players.reduce((acc, p) => {
+        const mentalMultiplier = (p.morale !== undefined && p.morale < 50) ? 0.8 : 1.0;
+        const playerPower = (p.stats.aim * 1.2 + p.stats.reflex + p.stats.teamwork) * mentalMultiplier;
+        return acc + playerPower;
+    }, 0);
+
+    let skillUs = getSkill(usTeam);
     const skillEnemy = getSkill(enemyTeam);
+
+    // Apply Active Fatigue Penalty (Freshness check)
+    // e.g., Heavy Training = 20% penalty to raw skill
+    if (fatiguePenaltyUs > 0) {
+        skillUs = skillUs * (1.0 - fatiguePenaltyUs);
+    }
 
     const equipUs = getBuyPower(buyUs);
     const equipEnemy = getBuyPower(buyEnemy);

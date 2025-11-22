@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { MatchResult, MatchLog, Team, PlayerMatchStats, KillEvent, Tactic } from '../types';
-import { Trophy, XCircle, Eye, List, PauseCircle, Play, Brain, Zap, Shield, Check, X } from 'lucide-react';
+import { Trophy, XCircle, PauseCircle, Play, Zap, CheckCircle, FastForward } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
-import { RoundState, simulateRound, determineBuy } from '../services/geminiService';
+import { RoundState, simulateRound } from '../services/geminiService';
 
 interface MatchViewProps {
   playerTeam: Team;
@@ -11,6 +11,7 @@ interface MatchViewProps {
   mapId: string;
   context: string;
   onComplete: (result: MatchResult) => void;
+  fatiguePenalty?: number;
 }
 
 // --- ASSETS ---
@@ -83,7 +84,7 @@ const StatRow: React.FC<{ stats: PlayerMatchStats, isMvp: boolean }> = ({ stats,
       <td className={`py-2 px-3 text-center font-mono ${kdDiff > 0 ? 'text-green-400' : kdDiff < 0 ? 'text-red-400' : 'text-gray-400'}`}>
          {kdDiff > 0 ? '+' : ''}{kdDiff}
       </td>
-      <td className="py-2 px-3 text-center text-gray-400 hidden md:table-cell">{stats.adr.toFixed(1)}</td>
+      <td className="py-2 px-3 text-center text-gray-400 hidden sm:table-cell">{stats.adr.toFixed(1)}</td>
       <td className={`py-2 px-3 text-center font-bold ${stats.rating >= 1.1 ? 'text-green-400' : 'text-gray-400'}`}>
          {stats.rating.toFixed(2)}
       </td>
@@ -91,7 +92,7 @@ const StatRow: React.FC<{ stats: PlayerMatchStats, isMvp: boolean }> = ({ stats,
   );
 };
 
-export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, mapId, context, onComplete }) => {
+export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, mapId, context, onComplete, fatiguePenalty = 0 }) => {
   // --- SIMULATION STATE ---
   const [roundNum, setRoundNum] = useState(1);
   const [simState, setSimState] = useState<RoundState>({
@@ -116,8 +117,8 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
   const [isSimulating, setIsSimulating] = useState(true);
   const [viewMode, setViewMode] = useState<'feed' | 'scoreboard'>('feed');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [currentLogData, setCurrentLogData] = useState<MatchLog | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isAnimatingRef = useRef(false);
 
   // Store the final calculated result to avoid recalculating on render/click
@@ -127,7 +128,6 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
   const getWinThreshold = (scoreA: number, scoreB: number) => {
       // Regular Time: Win at 13
       let target = 13;
-      
       // Check if we are in OT territory (e.g., 12-12, 15-15)
       while (scoreA >= target - 1 && scoreB >= target - 1) {
           target += 3;
@@ -212,7 +212,8 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         stateCopy.previousBuyEnemy = 'ECO';
     }
 
-    const events = simulateRound(roundNum, stateCopy, playerTeam, enemyTeam, currentTactic, enemyTactic, mapId, boost);
+    // PASS FATIGUE PENALTY TO SIMULATION
+    const events = simulateRound(roundNum, stateCopy, playerTeam, enemyTeam, currentTactic, enemyTactic, mapId, boost, fatiguePenalty);
 
     let desc = `Standard Gun Round`;
     if (roundNum === 1 || roundNum === 13) desc = "Pistol Round";
@@ -241,7 +242,6 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
     };
 
     const nextState = { ...stateCopy, logs: [...currentLogs, newLog] };
-    setCurrentLogData(newLog);
     
     playRoundEvents(events, newLog, nextState);
   };
@@ -250,13 +250,15 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
     setDisplayedLogs([]);
     let eventIdx = 0;
     
-    const interval = setInterval(() => {
+    if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
+
+    playbackIntervalRef.current = setInterval(() => {
         if (eventIdx < events.length) {
             setDisplayedLogs(prev => [...prev, events[eventIdx]]);
             eventIdx++;
             if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         } else {
-            clearInterval(interval);
+            if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
             
             setSimState(nextState);
 
@@ -268,8 +270,83 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
     }, 600);
   };
 
-  const finishMatch = () => {
-    if (finalResult) return; // Prevent double calculation
+  const skipMatch = () => {
+      if (finalResult || !isSimulating) return;
+
+      setIsSimulating(false);
+      setIsTimeoutActive(false);
+
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
+      isAnimatingRef.current = false;
+
+      let currentState = { ...simState, logs: [...simState.logs] };
+      let currentRound = roundNum;
+
+      while (true) {
+           const winThreshold = getWinThreshold(currentState.scoreUs, currentState.scoreEnemy);
+           if (currentState.scoreUs >= winThreshold || currentState.scoreEnemy >= winThreshold) break;
+
+           // Resets
+           if (currentRound === 13 || (currentRound >= 25 && (currentRound - 25) % 3 === 0)) {
+              const isOT = currentRound >= 25;
+              currentState.moneyUs = isOT ? 10000 : 4000;
+              currentState.moneyEnemy = isOT ? 10000 : 4000;
+              currentState.lossStreakUs = 0;
+              currentState.lossStreakEnemy = 0;
+              currentState.survivingCountUs = 0;
+              currentState.survivingCountEnemy = 0;
+              currentState.previousBuyUs = 'ECO';
+              currentState.previousBuyEnemy = 'ECO';
+           }
+
+           let enemyTactic = Tactic.DEFAULT;
+           if (Math.random() > 0.7) enemyTactic = Tactic.AGGRESSIVE;
+           else if (Math.random() > 0.5) enemyTactic = Tactic.PASSIVE;
+
+           const boost = 0; 
+           const prevScoreUs = currentState.scoreUs;
+
+           // Note: currentTactic is from component state, which is fine.
+           const events = simulateRound(currentRound, currentState, playerTeam, enemyTeam, currentTactic, enemyTactic, mapId, boost, fatiguePenalty);
+
+           const winner = currentState.scoreUs > prevScoreUs ? 'us' : 'enemy';
+
+           // Simple Desc for skip
+           let desc = `Round ${currentRound}`;
+           if (currentRound === 1 || currentRound === 13) desc = "Pistol Round";
+           else if (currentRound >= 25) desc = "Overtime";
+           else {
+                 const niceName = (b: string) => b.replace('_', ' ').toLowerCase();
+                 const buyUs = currentState.previousBuyUs;
+                 const buyEnemy = currentState.previousBuyEnemy;
+                 desc = `${niceName(buyUs)} vs ${niceName(buyEnemy)}`;
+                 desc = desc.replace(/\b\w/g, l => l.toUpperCase());
+           }
+
+           currentState.logs.push({
+               roundNumber: currentRound,
+               winner,
+               description: desc,
+               scoreUs: currentState.scoreUs,
+               scoreEnemy: currentState.scoreEnemy,
+               events,
+               moneyUs: currentState.moneyUs,
+               moneyEnemy: currentState.moneyEnemy
+           });
+
+           currentRound++;
+      }
+
+      setSimState(currentState);
+      setRoundNum(currentRound);
+      finishMatch(currentState);
+  };
+
+  const finishMatch = (finalState?: RoundState) => {
+    if (finalResult) return;
+    
+    const stateToUse = finalState || simState;
 
     setIsSimulating(false);
     
@@ -289,13 +366,11 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         }
     };
 
-    simState.logs.forEach(log => {
+    stateToUse.logs.forEach(log => {
         log.events.forEach(ev => {
-            // Find team to attribute kill
             if (playerStatsUs.find(p => p.alias === ev.killer)) processStats(playerStatsUs, ev.killer, 'kill');
             else processStats(playerStatsEnemy, ev.killer, 'kill');
 
-            // Find team to attribute death
             if (playerStatsUs.find(p => p.alias === ev.victim)) processStats(playerStatsUs, ev.victim, 'death');
             else processStats(playerStatsEnemy, ev.victim, 'death');
         });
@@ -311,21 +386,21 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         });
     };
 
-    const totalRounds = simState.scoreUs + simState.scoreEnemy;
+    const totalRounds = stateToUse.scoreUs + stateToUse.scoreEnemy;
     calculateRating(playerStatsUs, totalRounds);
     calculateRating(playerStatsEnemy, totalRounds);
 
     // 2. Determine MVP
     const allPlayers = [...playerStatsUs, ...playerStatsEnemy];
     const mvp = allPlayers.length > 0 ? allPlayers.reduce((prev, current) => (prev.rating > current.rating) ? prev : current) : playerStatsUs[0];
-    const isWin = simState.scoreUs > simState.scoreEnemy;
+    const isWin = stateToUse.scoreUs > stateToUse.scoreEnemy;
 
     // 3. Create Final Result Object
     const result: MatchResult = {
         enemyTeamName: enemyTeam.name,
-        finalScoreUs: simState.scoreUs,
-        finalScoreEnemy: simState.scoreEnemy,
-        logs: simState.logs,
+        finalScoreUs: stateToUse.scoreUs,
+        finalScoreEnemy: stateToUse.scoreEnemy,
+        logs: stateToUse.logs,
         mvpAlias: mvp?.alias || 'Unknown',
         earnings: isWin ? 12500 : 4500,
         summary: isWin ? "Victory achieved." : "Defeat.",
@@ -351,7 +426,6 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
   };
 
   const isWin = simState.scoreUs > simState.scoreEnemy;
-  
   const playerSide = getTeamSide(roundNum);
   const enemySide = playerSide === 'CT' ? 'T' : 'CT';
 
@@ -391,7 +465,18 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
       )}
 
       {/* HEADER */}
-      <div className="bg-[#1b1b21] p-4 border-b border-gray-800 flex justify-center items-center shadow-xl z-20 shrink-0">
+      <div className="bg-[#1b1b21] p-4 border-b border-gray-800 flex justify-center items-center shadow-xl z-20 shrink-0 relative">
+        
+        {/* SKIP BUTTON */}
+        {isSimulating && (
+            <button 
+                onClick={skipMatch}
+                className="absolute top-4 right-4 z-30 bg-gray-800 hover:bg-gray-700 text-white border border-gray-600 px-4 py-2 rounded-full font-bold text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg transition-all hover:scale-105"
+            >
+                <FastForward size={14} className="fill-white" /> Skip to Result
+            </button>
+        )}
+
         <div className="flex-1 flex justify-end items-center gap-4 pr-6 text-right">
            {moraleBoostRounds > 0 && (
                <div className="flex items-center gap-1 bg-yellow-900/30 text-yellow-500 px-2 py-1 rounded border border-yellow-600/30 text-[10px] font-bold uppercase animate-pulse" title="Mental Boost Active">
@@ -403,7 +488,12 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
            </div>
         </div>
         
-        <div className="flex-none flex items-center gap-6 bg-black/50 px-10 py-3 rounded-md border border-gray-700/50 shadow-inner mx-4">
+        <div className="flex-none flex items-center gap-6 bg-black/50 px-10 py-3 rounded-md border border-gray-700/50 shadow-inner mx-4 relative">
+          {fatiguePenalty > 0 && (
+             <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white text-[9px] px-2 py-0.5 rounded font-bold uppercase whitespace-nowrap shadow-sm z-30 animate-pulse">
+                -{fatiguePenalty * 100}% FATIGUE PENALTY
+             </div>
+          )}
           <div className={`text-6xl font-mono font-black tracking-tighter ${simState.scoreUs > simState.scoreEnemy ? 'text-green-400' : 'text-white'}`}>{simState.scoreUs}</div>
           <div className="text-gray-600 font-thin text-4xl opacity-50">:</div>
           <div className={`text-6xl font-mono font-black tracking-tighter ${simState.scoreEnemy > simState.scoreUs ? 'text-red-400' : 'text-white'}`}>{simState.scoreEnemy}</div>
@@ -500,7 +590,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
 
                 {/* --- STATS TABLE --- */}
                 {finalResult && (
-                    <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                         {/* MY TEAM */}
                         <div className="bg-cs-dark border border-gray-800 rounded-lg overflow-hidden shadow-xl">
                             <div className="bg-gradient-to-r from-gray-900 to-cs-dark p-3 border-b border-gray-800 flex justify-between items-center">
@@ -513,7 +603,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
                                         <th className="py-2 px-3 text-left">Player</th>
                                         <th className="py-2 px-3 text-center">K-D</th>
                                         <th className="py-2 px-3 text-center">+/-</th>
-                                        <th className="py-2 px-3 text-center hidden md:table-cell">ADR</th>
+                                        <th className="py-2 px-3 text-center hidden sm:table-cell">ADR</th>
                                         <th className="py-2 px-3 text-center">Rating</th>
                                     </tr>
                                 </thead>
@@ -537,7 +627,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
                                         <th className="py-2 px-3 text-left">Player</th>
                                         <th className="py-2 px-3 text-center">K-D</th>
                                         <th className="py-2 px-3 text-center">+/-</th>
-                                        <th className="py-2 px-3 text-center hidden md:table-cell">ADR</th>
+                                        <th className="py-2 px-3 text-center hidden sm:table-cell">ADR</th>
                                         <th className="py-2 px-3 text-center">Rating</th>
                                     </tr>
                                 </thead>

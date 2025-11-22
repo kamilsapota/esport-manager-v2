@@ -1,15 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { Team, MapPracticeStats, Player, PlayerStats } from '../types';
-import { Target, Swords, Zap, Brain, CheckCircle, Lock, Activity, Users, AlertTriangle, Flame, Crosshair, Shield, Dumbbell, ChevronRight, Battery } from 'lucide-react';
+import { Team, MapPracticeStats, Player, PlayerStats, TrainingIntensity, ScheduledMatch } from '../types';
+import { Target, Swords, Zap, Brain, CheckCircle, Lock, Activity, Users, AlertTriangle, Flame, Crosshair, Shield, Dumbbell, ChevronRight, Battery, Calendar, BatteryWarning, BatteryCharging, Smile } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface PracticeViewProps {
   team: Team;
+  schedule: ScheduledMatch[];
+  currentDate: Date;
   onTrain: (mapId: string, skill: keyof MapPracticeStats) => void;
   onIndividualTrain: (playerId: string, drillType: DrillType) => void;
+  onUpdateSchedule: (dayIndex: number, intensity: TrainingIntensity) => void;
   onSetupComplete: (permaban: string, firstPick: string, focusMaps: string[]) => void;
   dailyActivities: { mapTraining: boolean; individualDrills: number };
+  isDailyTrainingComplete?: boolean;
 }
 
 // Drill Types
@@ -35,8 +39,8 @@ const MAP_POOL = [
     { id: 'Ancient', name: 'Ancient', img: 'https://www.hltv.org/img/static/statsmatchmaps/ancient.png', desc: 'Green maze. Close quarters.', logoColor: 'text-green-500' }
 ];
 
-export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onIndividualTrain, onSetupComplete, dailyActivities }) => {
-    const [activeTab, setActiveTab] = useState<'team' | 'individual'>('team');
+export const PracticeView: React.FC<PracticeViewProps> = ({ team, schedule, currentDate, onTrain, onIndividualTrain, onUpdateSchedule, onSetupComplete, dailyActivities, isDailyTrainingComplete = false }) => {
+    const [activeTab, setActiveTab] = useState<'team' | 'individual' | 'schedule'>('team');
     const [selectedMap, setSelectedMap] = useState<string | null>(null);
     
     // Use ID to always derive fresh player state from props
@@ -211,6 +215,30 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onInd
     const drillsRemaining = 3 - dailyActivities.individualDrills;
     const mapTrainingRemaining = dailyActivities.mapTraining ? 0 : 1;
 
+    // HELPER: Check if next X days has match
+    // NOTE: This logic now assumes dayIndex 0 = MONDAY.
+    const getNextMatchInfo = (dayIndex: number) => {
+        // Create a date for the next occurrence of dayIndex
+        const targetDate = new Date(currentDate);
+        
+        // Convert JS getDay() (0=Sun) to our Mon=0 system
+        const todayIndex = (targetDate.getDay() + 6) % 7; 
+        
+        // Find days until next 'dayIndex'
+        let daysUntil = (dayIndex - todayIndex + 7) % 7;
+        
+        targetDate.setDate(targetDate.getDate() + daysUntil);
+        
+        // Check if any match matches this date
+        const match = schedule.find(m => !m.isPlayed && new Date(m.date).toDateString() === targetDate.toDateString());
+        
+        return {
+            isMatchDay: !!match,
+            matchName: match ? (match.type === 'LEAGUE' ? match.leagueName : 'Tournament') : '',
+            isToday: daysUntil === 0
+        }
+    }
+
     return (
         <div className="p-6 max-w-7xl mx-auto">
             {/* HEADER */}
@@ -251,15 +279,165 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, onTrain, onInd
                         >
                             <Dumbbell size={16} /> Individual Training
                         </button>
+                        <button 
+                            onClick={() => setActiveTab('schedule')}
+                            className={`px-4 py-2 rounded text-sm font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'schedule' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            <Calendar size={16} /> Weekly Plan
+                        </button>
                     </div>
                 </div>
             </div>
             
             {/* DAILY LOCK INDICATOR */}
-            {drillsRemaining === 0 && mapTrainingRemaining === 0 && (
+            {drillsRemaining === 0 && mapTrainingRemaining === 0 && activeTab !== 'schedule' && (
                  <div className="mb-6 flex items-center gap-2 bg-red-900/20 border border-red-800/50 px-4 py-3 rounded-lg text-red-400 w-full animate-fade-in">
                     <Lock size={18} />
                     <span className="font-bold uppercase tracking-wider">Facility Closed for the Day (All Slots Used)</span>
+                </div>
+            )}
+
+            {/* WEEKLY SCHEDULE PLANNER */}
+            {activeTab === 'schedule' && (
+                <div className="animate-fade-in">
+                    <div className="bg-cs-dark border border-gray-800 rounded-xl shadow-xl p-6 mb-6">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-purple-500/20 p-3 rounded-full">
+                                    <Calendar className="text-purple-400" size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Weekly Training Schedule</h3>
+                                    <p className="text-gray-400 text-sm">Manage fatigue. High intensity on Match Day reduces performance significantly.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* MENTAL STATUS OVERVIEW */}
+                        <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-800 mb-6">
+                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                 <Smile size={14} /> Team Mental Status
+                             </h4>
+                             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                 {team.players.map(p => {
+                                     let color = 'text-green-400 bg-green-900/20 border-green-800';
+                                     if (p.morale < 50) color = 'text-red-400 bg-red-900/20 border-red-800';
+                                     else if (p.morale < 80) color = 'text-yellow-400 bg-yellow-900/20 border-yellow-800';
+
+                                     return (
+                                         <div key={p.id} className={`p-2 rounded border ${color} flex flex-col items-center justify-center text-center`}>
+                                             <div className="text-xs font-bold text-white truncate w-full mb-1">{p.alias}</div>
+                                             <div className="font-mono font-bold text-lg leading-none">
+                                                 {p.morale}%
+                                             </div>
+                                             {p.morale < 50 && <span className="text-[9px] uppercase font-bold mt-1">TILTED</span>}
+                                         </div>
+                                     )
+                                 })}
+                             </div>
+                        </div>
+
+                        {/* Updated Grid: More Responsive and Bigger Tiles */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+                            {/* Changed Order: Monday first */}
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((dayName, index) => {
+                                const currentIntensity = team.weeklySchedule[index] || TrainingIntensity.MEDIUM;
+                                const { isMatchDay, matchName, isToday } = getNextMatchInfo(index);
+
+                                let intensityColor = 'bg-gray-800 border-gray-700 text-gray-500';
+                                if (currentIntensity === TrainingIntensity.LIGHT) intensityColor = 'bg-green-900/20 border-green-800 text-green-400';
+                                if (currentIntensity === TrainingIntensity.MEDIUM) intensityColor = 'bg-yellow-900/20 border-yellow-800 text-yellow-400';
+                                if (currentIntensity === TrainingIntensity.HEAVY) intensityColor = 'bg-red-900/20 border-red-800 text-red-400';
+
+                                return (
+                                    <div key={index} className={`border rounded-xl p-5 flex flex-col justify-between gap-4 ${intensityColor} relative overflow-hidden transition-all shadow-lg hover:shadow-xl hover:scale-[1.02] min-h-[280px] ${isToday ? 'ring-2 ring-cs-blue ring-offset-2 ring-offset-[#15151a]' : ''}`}>
+                                        {isToday && <div className="absolute top-0 left-0 right-0 h-1 bg-cs-blue"></div>}
+                                        
+                                        {/* Match Indicator */}
+                                        {isMatchDay && (
+                                            <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-black uppercase text-white bg-red-600 px-2 py-1 rounded animate-pulse shadow-sm">
+                                                <Swords size={12} /> Match
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <div className="font-black uppercase tracking-widest text-lg text-center mb-3 flex justify-center items-center gap-2 text-white">
+                                                {dayName}
+                                                {isToday && <span className="text-[8px] bg-cs-blue text-white px-1.5 py-0.5 rounded align-middle">TODAY</span>}
+                                            </div>
+                                            
+                                            <div className="flex flex-col gap-2 z-10">
+                                                {Object.values(TrainingIntensity).map((intensity) => (
+                                                    <button
+                                                        key={intensity}
+                                                        onClick={() => onUpdateSchedule(index, intensity)}
+                                                        className={`text-xs font-bold py-2 px-2 rounded uppercase transition-colors text-center border
+                                                            ${currentIntensity === intensity 
+                                                                ? 'bg-black/40 border-white/20 text-white shadow-inner' 
+                                                                : 'border-transparent hover:bg-black/20 text-white/50 hover:text-white hover:border-white/10'}`}
+                                                    >
+                                                        {intensity}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Info Badge */}
+                                        <div className="text-center space-y-2 pt-2 border-t border-white/5">
+                                            <div className="text-xs font-mono opacity-80 flex justify-between px-1">
+                                                {/* XP is always green per request */}
+                                                <span className="text-green-400 font-bold">
+                                                    {currentIntensity === 'Rest' && '0 XP'}
+                                                    {currentIntensity === 'Light' && '~40 XP'}
+                                                    {currentIntensity === 'Medium' && '~80 XP'}
+                                                    {currentIntensity === 'Heavy' && '~150 XP'}
+                                                </span>
+                                                <span className={`${currentIntensity === 'Rest' || currentIntensity === 'Light' ? 'text-green-400' : 'text-red-400'} font-bold`}>
+                                                    {currentIntensity === 'Rest' && '+10 Men'}
+                                                    {currentIntensity === 'Light' && '+5 Men'}
+                                                    {currentIntensity === 'Medium' && '-5 Men'}
+                                                    {currentIntensity === 'Heavy' && '-15 Men'}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* MATCH DAY WARNINGS */}
+                                            {isMatchDay && currentIntensity === TrainingIntensity.HEAVY && (
+                                                <div className="text-[10px] font-bold bg-red-500/20 text-red-200 border border-red-500/50 p-1.5 rounded flex items-center justify-center gap-1 animate-pulse">
+                                                    <AlertTriangle size={12} /> -20% PENALTY
+                                                </div>
+                                            )}
+                                            {isMatchDay && currentIntensity === TrainingIntensity.MEDIUM && (
+                                                <div className="text-[10px] font-bold bg-yellow-500/20 text-yellow-200 border border-yellow-500/50 p-1.5 rounded flex items-center justify-center gap-1">
+                                                    <AlertTriangle size={12} /> -10% PENALTY
+                                                </div>
+                                            )}
+                                            {isMatchDay && (currentIntensity === TrainingIntensity.LIGHT || currentIntensity === TrainingIntensity.REST) && (
+                                                <div className="text-[10px] font-bold bg-green-500/20 text-green-200 border border-green-500/50 p-1.5 rounded flex items-center justify-center gap-1">
+                                                    <CheckCircle size={12} /> MATCH READY
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        
+                        <div className="mt-6 bg-blue-900/20 border border-blue-800/50 p-4 rounded-lg flex items-start gap-3">
+                            <BatteryCharging className="text-blue-400 shrink-0 mt-0.5" size={18} />
+                            <div>
+                                <h4 className="text-sm font-bold text-blue-200 mb-1">Mental & Fatigue Management</h4>
+                                <p className="text-xs text-blue-300/80">
+                                    <span className="font-bold text-white">Match Day Fatigue:</span> High intensity training on Match Day tires players out immediately.
+                                    <br/>
+                                    • <span className="text-red-400 font-bold">Heavy:</span> -20% Team Power (Severe Fatigue)
+                                    <br/>
+                                    • <span className="text-yellow-400 font-bold">Medium:</span> -10% Team Power (Slight Fatigue)
+                                    <br/>
+                                    • <span className="text-green-400 font-bold">Light/Rest:</span> No Penalty (Fresh)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
