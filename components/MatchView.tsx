@@ -120,6 +120,9 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAnimatingRef = useRef(false);
 
+  // Store the final calculated result to avoid recalculating on render/click
+  const [finalResult, setFinalResult] = useState<MatchResult | null>(null);
+
   // --- HELPERS FOR WIN CONDITION (MR12 + OT) ---
   const getWinThreshold = (scoreA: number, scoreB: number) => {
       // Regular Time: Win at 13
@@ -132,8 +135,15 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
       return target;
   };
 
+  const getTeamSide = (r: number) => {
+      if (r <= 12) return 'CT';
+      if (r <= 24) return 'T';
+      // OT: 25-27 CT, 28-30 T
+      const otRound = r - 24;
+      return Math.ceil(otRound / 3) % 2 === 1 ? 'CT' : 'T';
+  };
+
   // --- EFFECT 1: WIN CHECK & END GAME ---
-  // Triggers ONLY when score updates
   useEffect(() => {
     const winThreshold = getWinThreshold(simState.scoreUs, simState.scoreEnemy);
     if (simState.scoreUs >= winThreshold || simState.scoreEnemy >= winThreshold) {
@@ -143,52 +153,42 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
   }, [simState.scoreUs, simState.scoreEnemy]);
 
   // --- EFFECT 2: SIMULATION LOOP ---
-  // Triggers ONLY on round number or pause state changes. 
-  // Does NOT trigger on score change to prevent double-firing during animations.
   useEffect(() => {
     if (!isSimulating) return;
     if (isTimeoutActive) return;
+    // If we already have a final result, stop.
+    if (finalResult) return;
 
-    // Safety check: if game is actually over, don't schedule next round
     const winThreshold = getWinThreshold(simState.scoreUs, simState.scoreEnemy);
     if (simState.scoreUs >= winThreshold || simState.scoreEnemy >= winThreshold) return;
 
-    // Delay before starting a round simulation (gives visual pacing)
     timerRef.current = setTimeout(() => {
-        // Strict check: Don't run if animation is currently happening
         if (!isAnimatingRef.current) {
             runRound(winThreshold);
         }
-    }, 3500); // 3.5s between rounds
+    }, 3000); 
 
     return () => {
         if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [roundNum, isSimulating, isTimeoutActive]); 
+  }, [roundNum, isSimulating, isTimeoutActive, finalResult]); 
 
   const runRound = (winThreshold: number) => {
-    // Double check win condition
     if (simState.scoreUs >= winThreshold || simState.scoreEnemy >= winThreshold) return;
 
-    // Lock animation
     isAnimatingRef.current = true;
 
-    // 1. Determine Opponent Tactic
     let enemyTactic = Tactic.DEFAULT;
     if (Math.random() > 0.7) enemyTactic = Tactic.AGGRESSIVE;
     else if (Math.random() > 0.5) enemyTactic = Tactic.PASSIVE;
 
-    // 2. Apply Boosts
     const boost = moraleBoostRounds > 0 ? 0.05 : 0;
     if (moraleBoostRounds > 0) setMoraleBoostRounds(prev => prev - 1);
 
-    // 3. Prepare State
     const currentLogs = [...simState.logs];
     const stateCopy = { ...simState, logs: currentLogs };
 
-    // --- ECONOMY RESETS ---
-    
-    // Halftime Reset (Round 13)
+    // Halftime Reset
     if (roundNum === 13) {
         stateCopy.moneyUs = 4000;
         stateCopy.moneyEnemy = 4000;
@@ -200,7 +200,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         stateCopy.previousBuyEnemy = 'ECO';
     }
 
-    // OVERTIME RESET LOGIC
+    // OT Reset
     if (roundNum >= 25 && (roundNum - 25) % 3 === 0) {
         stateCopy.moneyUs = 10000;
         stateCopy.moneyEnemy = 10000;
@@ -214,13 +214,12 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
 
     const events = simulateRound(roundNum, stateCopy, playerTeam, enemyTeam, currentTactic, enemyTactic, mapId, boost);
 
-    // Create Log Entry
     let desc = `Standard Gun Round`;
     if (roundNum === 1 || roundNum === 13) desc = "Pistol Round";
     else if (roundNum >= 25) desc = "Overtime"; 
     else {
             const niceName = (b: string) => b.replace('_', ' ').toLowerCase();
-            const buyUs = stateCopy.previousBuyUs; // simulateRound updates this
+            const buyUs = stateCopy.previousBuyUs; 
             const buyEnemy = stateCopy.previousBuyEnemy;
             
             if (buyUs === 'FULL_BUY' && buyEnemy === 'FULL_BUY') desc = "Full Buy vs Full Buy";
@@ -241,15 +240,13 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         moneyEnemy: stateCopy.moneyEnemy
     };
 
-    // Update State
-    setSimState({ ...stateCopy, logs: [...currentLogs, newLog] });
+    const nextState = { ...stateCopy, logs: [...currentLogs, newLog] };
     setCurrentLogData(newLog);
     
-    // 4. Play the events visually
-    playRoundEvents(events, newLog);
+    playRoundEvents(events, newLog, nextState);
   };
 
-  const playRoundEvents = (events: KillEvent[], log: MatchLog) => {
+  const playRoundEvents = (events: KillEvent[], log: MatchLog, nextState: RoundState) => {
     setDisplayedLogs([]);
     let eventIdx = 0;
     
@@ -260,18 +257,23 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
             if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         } else {
             clearInterval(interval);
-            // Next round trigger
-            isAnimatingRef.current = false; // Unlock
-            setRoundNum(prev => prev + 1);
+            
+            setSimState(nextState);
+
+            setTimeout(() => {
+                isAnimatingRef.current = false;
+                setRoundNum(prev => prev + 1);
+            }, 1500);
         }
-    }, 500); // Speed of events
+    }, 600);
   };
 
   const finishMatch = () => {
-    setIsSimulating(false);
-    setViewMode('scoreboard');
+    if (finalResult) return; // Prevent double calculation
 
-    // Calculate Stats
+    setIsSimulating(false);
+    
+    // 1. Calculate Stats
     const playerStatsUs: PlayerMatchStats[] = playerTeam.players.map(p => ({
         alias: p.alias, country: p.country, kills: 0, deaths: 0, assists: 0, adr: 0, kast: 0, rating: 0
     }));
@@ -289,9 +291,11 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
 
     simState.logs.forEach(log => {
         log.events.forEach(ev => {
+            // Find team to attribute kill
             if (playerStatsUs.find(p => p.alias === ev.killer)) processStats(playerStatsUs, ev.killer, 'kill');
             else processStats(playerStatsEnemy, ev.killer, 'kill');
 
+            // Find team to attribute death
             if (playerStatsUs.find(p => p.alias === ev.victim)) processStats(playerStatsUs, ev.victim, 'death');
             else processStats(playerStatsEnemy, ev.victim, 'death');
         });
@@ -300,8 +304,8 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
     const calculateRating = (stats: PlayerMatchStats[], rounds: number) => {
         stats.forEach(s => {
             s.adr = (s.kills * 85) / (rounds || 1);
-            const kpr = s.kills / rounds;
-            const dpr = s.deaths / rounds;
+            const kpr = s.kills / (rounds || 1);
+            const dpr = s.deaths / (rounds || 1);
             const impact = kpr * 2.1;
             s.rating = (kpr * 0.7) + (impact * 0.3) + ((1-dpr) * 0.5);
         });
@@ -311,10 +315,12 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
     calculateRating(playerStatsUs, totalRounds);
     calculateRating(playerStatsEnemy, totalRounds);
 
+    // 2. Determine MVP
     const allPlayers = [...playerStatsUs, ...playerStatsEnemy];
     const mvp = allPlayers.length > 0 ? allPlayers.reduce((prev, current) => (prev.rating > current.rating) ? prev : current) : playerStatsUs[0];
     const isWin = simState.scoreUs > simState.scoreEnemy;
 
+    // 3. Create Final Result Object
     const result: MatchResult = {
         enemyTeamName: enemyTeam.name,
         finalScoreUs: simState.scoreUs,
@@ -328,8 +334,8 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         mapPlayed: mapId
     };
 
-    // Pass result to parent (App)
-    // We don't call onComplete immediately so user can see scoreboard first
+    setFinalResult(result);
+    setViewMode('scoreboard');
   };
 
   const handleCallTimeout = () => {
@@ -340,12 +346,14 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
   };
 
   const confirmTimeout = () => {
-      setMoraleBoostRounds(3);
+      setMoraleBoostRounds(2); 
       setIsTimeoutActive(false);
-      // Match loop useEffect will re-trigger
   };
 
   const isWin = simState.scoreUs > simState.scoreEnemy;
+  
+  const playerSide = getTeamSide(roundNum);
+  const enemySide = playerSide === 'CT' ? 'T' : 'CT';
 
   return (
     <div className="flex flex-col h-screen max-h-screen overflow-hidden bg-cs-darker font-sans relative">
@@ -358,7 +366,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
                   <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter mb-2 flex items-center gap-2">
                       <PauseCircle className="text-cs-yellow" size={32} /> Tactical Timeout
                   </h2>
-                  <p className="text-gray-400 mb-8">Call a play. Boost team mental (+5% Win Chance for 3 rounds).</p>
+                  <p className="text-gray-400 mb-8">Call a play. Boost team mental (+5% Win Chance for 2 rounds).</p>
 
                   <div className="grid grid-cols-3 gap-4 mb-8">
                       {[Tactic.AGGRESSIVE, Tactic.DEFAULT, Tactic.PASSIVE].map(t => (
@@ -383,24 +391,28 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
       )}
 
       {/* HEADER */}
-      <div className="bg-[#1b1b21] p-4 border-b border-gray-800 flex justify-between items-center shadow-xl z-20 shrink-0">
-        <div className="w-1/3 text-left flex items-center gap-3">
-           <div className="text-2xl font-black text-ct-blue tracking-tight truncate drop-shadow-md">{playerTeam.name}</div>
+      <div className="bg-[#1b1b21] p-4 border-b border-gray-800 flex justify-center items-center shadow-xl z-20 shrink-0">
+        <div className="flex-1 flex justify-end items-center gap-4 pr-6 text-right">
            {moraleBoostRounds > 0 && (
                <div className="flex items-center gap-1 bg-yellow-900/30 text-yellow-500 px-2 py-1 rounded border border-yellow-600/30 text-[10px] font-bold uppercase animate-pulse" title="Mental Boost Active">
                    <Zap size={12} className="fill-yellow-500" /> +5% ({moraleBoostRounds})
                </div>
            )}
+           <div className={`text-2xl font-black tracking-tight truncate drop-shadow-md ${playerSide === 'CT' ? 'text-ct-blue' : 'text-t-red'}`}>
+               {playerTeam.name}
+           </div>
         </div>
         
-        <div className="flex items-center gap-6 bg-black/50 px-10 py-3 rounded-md border border-gray-700/50 shadow-inner">
+        <div className="flex-none flex items-center gap-6 bg-black/50 px-10 py-3 rounded-md border border-gray-700/50 shadow-inner mx-4">
           <div className={`text-6xl font-mono font-black tracking-tighter ${simState.scoreUs > simState.scoreEnemy ? 'text-green-400' : 'text-white'}`}>{simState.scoreUs}</div>
           <div className="text-gray-600 font-thin text-4xl opacity-50">:</div>
           <div className={`text-6xl font-mono font-black tracking-tighter ${simState.scoreEnemy > simState.scoreUs ? 'text-red-400' : 'text-white'}`}>{simState.scoreEnemy}</div>
         </div>
 
-        <div className="w-1/3 text-right">
-           <div className="text-2xl font-black text-t-red tracking-tight truncate drop-shadow-md">{enemyTeam.name}</div>
+        <div className="flex-1 flex justify-start items-center gap-4 pl-6 text-left">
+           <div className={`text-2xl font-black tracking-tight truncate drop-shadow-md ${enemySide === 'CT' ? 'text-ct-blue' : 'text-t-red'}`}>
+               {enemyTeam.name}
+           </div>
         </div>
       </div>
 
@@ -442,7 +454,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
 
                 {/* MANAGER CONTROLS */}
                 {isSimulating && (
-                    <div className="absolute bottom-6 left-0 right-0 flex justify-center z-20">
+                    <div className="absolute bottom-12 left-0 right-0 flex justify-center z-20">
                         <button 
                             onClick={handleCallTimeout}
                             disabled={timeoutsRemaining <= 0}
@@ -467,7 +479,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         {viewMode === 'scoreboard' && (
             <div className="h-full overflow-y-auto p-6 animate-fade-in bg-[#15151a]">
                 {!isSimulating && (
-                    <div className="text-center mb-10">
+                    <div className="text-center mb-8">
                         {isWin ? (
                              <div className="text-yellow-400 flex flex-col items-center gap-2 animate-bounce-in">
                                  <Trophy size={64} className="drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]" />
@@ -486,53 +498,65 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
                     </div>
                 )}
 
-                {/* Reuse Scoreboard Table Logic (Simplified for brevity, assumes matchResult logic in parent handles final structure) */}
-                 <div className="text-center mt-12 pb-12">
-                    <p className="text-gray-500 italic mb-6">Match stats finalized.</p>
+                {/* --- STATS TABLE --- */}
+                {finalResult && (
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+                        {/* MY TEAM */}
+                        <div className="bg-cs-dark border border-gray-800 rounded-lg overflow-hidden shadow-xl">
+                            <div className="bg-gradient-to-r from-gray-900 to-cs-dark p-3 border-b border-gray-800 flex justify-between items-center">
+                                <h3 className="font-bold text-white uppercase tracking-wide">{playerTeam.name}</h3>
+                                <span className="text-xs text-gray-500 uppercase">Player Stats</span>
+                            </div>
+                            <table className="w-full">
+                                <thead className="bg-gray-900/50 text-xs text-gray-500 uppercase font-bold">
+                                    <tr>
+                                        <th className="py-2 px-3 text-left">Player</th>
+                                        <th className="py-2 px-3 text-center">K-D</th>
+                                        <th className="py-2 px-3 text-center">+/-</th>
+                                        <th className="py-2 px-3 text-center hidden md:table-cell">ADR</th>
+                                        <th className="py-2 px-3 text-center">Rating</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {finalResult.playerStatsUs.sort((a,b) => b.kills - a.kills).map(stats => (
+                                        <StatRow key={stats.alias} stats={stats} isMvp={finalResult.mvpAlias === stats.alias} />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* ENEMY TEAM */}
+                        <div className="bg-cs-dark border border-gray-800 rounded-lg overflow-hidden shadow-xl opacity-90">
+                            <div className="bg-gradient-to-r from-gray-900 to-cs-dark p-3 border-b border-gray-800 flex justify-between items-center">
+                                <h3 className="font-bold text-red-400 uppercase tracking-wide">{enemyTeam.name}</h3>
+                                <span className="text-xs text-gray-500 uppercase">Player Stats</span>
+                            </div>
+                             <table className="w-full">
+                                <thead className="bg-gray-900/50 text-xs text-gray-500 uppercase font-bold">
+                                    <tr>
+                                        <th className="py-2 px-3 text-left">Player</th>
+                                        <th className="py-2 px-3 text-center">K-D</th>
+                                        <th className="py-2 px-3 text-center">+/-</th>
+                                        <th className="py-2 px-3 text-center hidden md:table-cell">ADR</th>
+                                        <th className="py-2 px-3 text-center">Rating</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {finalResult.playerStatsEnemy.sort((a,b) => b.kills - a.kills).map(stats => (
+                                        <StatRow key={stats.alias} stats={stats} isMvp={finalResult.mvpAlias === stats.alias} />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                 <div className="text-center pb-12">
                     <button 
                     onClick={() => {
-                         // Trigger real calculation if needed, or use current state
-                         finishMatch(); // Ensure stats are calc
-                         
-                         const isWin = simState.scoreUs > simState.scoreEnemy;
-                         const finalResult: MatchResult = {
-                            enemyTeamName: enemyTeam.name,
-                            finalScoreUs: simState.scoreUs,
-                            finalScoreEnemy: simState.scoreEnemy,
-                            logs: simState.logs,
-                            mvpAlias: playerTeam.players[0].alias, 
-                            earnings: isWin ? 12500 : 4500,
-                            summary: isWin ? "Victory" : "Defeat",
-                            playerStatsUs: [], 
-                            playerStatsEnemy: [],
-                            mapPlayed: mapId
-                         };
-                         // Recalculate stats properly before sending
-                         const statsUs: PlayerMatchStats[] = playerTeam.players.map(p => ({
-                            alias: p.alias, country: p.country, kills: 0, deaths: 0, assists: 0, adr: 0, kast: 0, rating: 0
-                        }));
-                        const statsEnemy: PlayerMatchStats[] = enemyTeam.players.map(p => ({
-                            alias: p.alias, country: p.country, kills: 0, deaths: 0, assists: 0, adr: 0, kast: 0, rating: 0
-                        }));
-
-                        const process = (teamStats: PlayerMatchStats[], alias: string, type: 'kill' | 'death') => {
-                            const p = teamStats.find(s => s.alias === alias);
-                            if (p) type === 'kill' ? p.kills++ : p.deaths++;
-                        };
-
-                        simState.logs.forEach(log => {
-                            log.events.forEach(ev => {
-                                if (statsUs.find(p => p.alias === ev.killer)) process(statsUs, ev.killer, 'kill');
-                                else process(statsEnemy, ev.killer, 'kill');
-                                if (statsUs.find(p => p.alias === ev.victim)) process(statsUs, ev.victim, 'death');
-                                else process(statsEnemy, ev.victim, 'death');
-                            });
-                        });
-
-                        finalResult.playerStatsUs = statsUs;
-                        finalResult.playerStatsEnemy = statsEnemy;
-                        
-                        onComplete(finalResult);
+                         if (finalResult) {
+                             onComplete(finalResult);
+                         }
                     }}
                     className="bg-cs-yellow hover:bg-yellow-400 text-black font-black uppercase px-10 py-4 rounded-lg shadow-[0_0_20px_rgba(250,204,21,0.3)] transition-all hover:scale-105 text-lg tracking-widest"
                 >

@@ -21,7 +21,7 @@ const MAX_MONEY_PER_PLAYER = 16000;
 const MAX_TEAM_MONEY = MAX_MONEY_PER_PLAYER * TEAM_SIZE; // 80,000
 
 // COSTS (Total for 5 players from 0)
-const COST_FULL_BUY = 21500; // ~4300 per player (AK/M4 + Armor + Util)
+const COST_FULL_BUY = 19500; // Reduced from 21500 to be less strict (allows ~3900 avg buy)
 const COST_FORCE_BUY = 9500; // ~1900 per player (SMG/Deagle + Armor)
 const COST_SEMI_ECO = 2500; // P250s
 const COST_ECO = 0;
@@ -50,13 +50,20 @@ export interface RoundState {
 // --- LOGIC ENGINE ---
 
 // Buy Logic State Machine
-export const determineBuy = (money: number, roundNum: number, isMatchPoint: boolean, scoreEnemy: number, scoreUs: number): BuyType => {
+export const determineBuy = (money: number, roundNum: number, isMatchPoint: boolean, scoreEnemy: number, scoreUs: number, lossStreak: number): BuyType => {
     // PISTOL ROUNDS
-    if (roundNum === 1 || roundNum === 13) return 'ECO'; 
+    if (roundNum === 1 || roundNum === 13 || (roundNum > 24 && (roundNum - 25) % 3 === 0)) return 'ECO'; 
 
     // MUST WIN (Last round of half or match point)
-    if (roundNum === 12 || isMatchPoint || scoreEnemy >= 12) {
+    if (roundNum === 12 || roundNum === 24 || isMatchPoint || scoreEnemy >= 12) {
         return money >= COST_FULL_BUY ? 'FULL_BUY' : 'FORCE_BUY';
+    }
+
+    // WINNER MOMENTUM: If we won previous round (lossStreak === 0), we shouldn't eco unless absolutely broke.
+    // If we have decent money, we force the advantage.
+    if (lossStreak === 0 && roundNum > 1) {
+        if (money >= 18000) return 'FULL_BUY';
+        if (money >= 10000) return 'FORCE_BUY'; // Bonus round / Anti-Eco
     }
 
     if (money >= COST_FULL_BUY) return 'FULL_BUY';
@@ -137,13 +144,13 @@ export const simulateRound = (
     mapId: string,
     moraleBoostUs: number = 0 // NEW: Manager intervention boost
 ): KillEvent[] => {
-    const isPistol = roundNum === 1 || roundNum === 13;
+    const isPistol = roundNum === 1 || roundNum === 13 || (roundNum > 24 && (roundNum - 25) % 3 === 0);
     const isMatchPointUs = state.scoreUs === 12;
     const isMatchPointEnemy = state.scoreEnemy === 12;
 
-    // 1. Determine Buys
-    let buyUs = determineBuy(state.moneyUs, roundNum, isMatchPointEnemy, state.scoreEnemy, state.scoreUs);
-    let buyEnemy = determineBuy(state.moneyEnemy, roundNum, isMatchPointUs, state.scoreUs, state.scoreEnemy);
+    // 1. Determine Buys (Now includes lossStreak to prevent Eco after Win)
+    let buyUs = determineBuy(state.moneyUs, roundNum, isMatchPointEnemy, state.scoreEnemy, state.scoreUs, state.lossStreakUs);
+    let buyEnemy = determineBuy(state.moneyEnemy, roundNum, isMatchPointUs, state.scoreUs, state.scoreEnemy, state.lossStreakEnemy);
 
     // Pistol Override
     if (isPistol) {
@@ -207,7 +214,18 @@ export const simulateRound = (
         return 300;
     };
 
-    const usSide = roundNum <= 12 ? 'CT' : 'T';
+    // SIDE DETERMINATION (Standard MR12 + OT MR3)
+    let usSide: 'CT' | 'T';
+    if (roundNum <= 12) usSide = 'CT';
+    else if (roundNum <= 24) usSide = 'T';
+    else {
+        // OT logic: Swap every 3 rounds. 
+        // 25-27: CT (Same as start usually, or swapped? Let's assume reset to start logic: A=CT)
+        const otRound = roundNum - 24;
+        usSide = otRound <= 3 ? 'CT' : 'T';
+        // Note: If OT goes further (31+), logic repeats but we keep it simple for now
+    }
+
     const enemySide = usSide === 'CT' ? 'T' : 'CT';
 
     const winnerTeam = usWins ? usTeam : enemyTeam;
@@ -220,11 +238,12 @@ export const simulateRound = (
     let aliveWinner = [...winnerTeam.players];
     let aliveLoser = [...loserTeam.players];
 
-    const winnerDeaths = Math.floor(Math.random() * 4); 
+    // WINNER DEATHS: 0, 1, or 2 usually.
+    const winnerDeaths = Math.floor(Math.random() * 3); 
     
-    let loserDeaths = Math.floor(Math.random() * 3) + 3;
-    if (loserBuy === 'ECO' && winnerBuy === 'FULL_BUY') loserDeaths = 5;
-    if (loserDeaths > 5) loserDeaths = 5;
+    // LOSER DEATHS: At least 4 kills for the winner (so loser deaths >= 4)
+    // Either 4 or 5 (mostly 5 for decisive wins)
+    let loserDeaths = Math.random() > 0.3 ? 5 : 4;
 
     let eventQueue: ('W' | 'L')[] = []; 
     for(let i=0; i<winnerDeaths; i++) eventQueue.push('W');
