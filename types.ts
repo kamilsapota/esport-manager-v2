@@ -54,11 +54,11 @@ export interface Player {
   stats: PlayerStats;
   
   // XP System
-  xp: Record<keyof PlayerStats, number>; // Current XP for each stat
+  xp: Record<keyof PlayerStats, number>; 
   
   marketValue: number;
   salary: number;
-  morale: number; // 0-100
+  morale: number; 
   avatarSeed?: string;
   matchHistory: PlayerPerformance[];
 }
@@ -77,31 +77,24 @@ export interface Team {
   players: Player[];
   budget: number;
   
-  // Record
   wins: number;
   losses: number;
   matchesPlayed: number;
   
-  // ESEA Specifics
   leaguePoints: number;
   roundDifference: number;
-  
-  // HLTV Specifics
   rankingPoints?: number;
   
-  // Tactics & Training
   mapStats: Record<string, number>;
   practiceStats?: Record<string, MapPracticeStats>;
   permaban?: string;
   
-  // Training Logic
   isMapPoolInitialized?: boolean;
   firstPickMap?: string;
   lastTrainedMapId?: string;
   consecutiveMapTrainCount?: number;
-  weeklySchedule: TrainingIntensity[]; // Index 0 = Sunday, 1 = Monday, etc.
+  weeklySchedule: TrainingIntensity[];
   
-  // Match Strategy
   preferredTactic?: Tactic;
 }
 
@@ -121,7 +114,7 @@ export interface MatchLog {
   scoreUs: number;
   scoreEnemy: number;
   events: KillEvent[];
-  moneyUs: number; // Track for UI/Debugging
+  moneyUs: number;
   moneyEnemy: number;
 }
 

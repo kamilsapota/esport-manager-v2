@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats, Tactic, TrainingIntensity } from './types';
 import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { Dashboard } from './components/Dashboard';
 import { PlayerCard } from './components/PlayerCard';
 import { MarketView } from './components/MarketView';
 import { MatchView } from './components/MatchView';
@@ -27,7 +29,7 @@ const EMPTY_TEAM: Team = {
   leaguePoints: 0,
   roundDifference: 0,
   mapStats: {},
-  weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM) // Default to Medium all week
+  weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM) 
 };
 
 const INITIAL_TOURNAMENTS: Tournament[] = [
@@ -48,6 +50,24 @@ type DailyGain = {
   value: number;
 };
 
+const COUNTRIES = [
+    { code: 'US', name: 'United States' },
+    { code: 'DK', name: 'Denmark' },
+    { code: 'FR', name: 'France' },
+    { code: 'SE', name: 'Sweden' },
+    { code: 'BR', name: 'Brazil' },
+    { code: 'RU', name: 'Russia' },
+    { code: 'PL', name: 'Poland' },
+    { code: 'UA', name: 'Ukraine' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'FI', name: 'Finland' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'CN', name: 'China' },
+    { code: 'ES', name: 'Spain' },
+];
+
 export default function App() {
   const [isGameStarted, setIsGameStarted] = useState(false);
   const [view, setView] = useState<GameView>(GameView.DASHBOARD);
@@ -62,24 +82,26 @@ export default function App() {
       individualDrills: 0 
   });
   
-  // New state to track if the passive morning training has happened for the current day
   const [isDailyTrainingComplete, setIsDailyTrainingComplete] = useState(false);
-
   const [dailyGains, setDailyGains] = useState<DailyGain[]>([]);
   const [showDaySummary, setShowDaySummary] = useState(false);
-
   const [leagueOpponents, setLeagueOpponents] = useState<Team[]>([]);
   const [latestRoundResults, setLatestRoundResults] = useState<LeagueRoundResult[]>([]);
-  
   const [nextOpponent, setNextOpponent] = useState<Team | null>(null);
   const [analysis, setAnalysis] = useState<OpponentAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisTimer, setAnalysisTimer] = useState<number>(0);
-  
   const [pendingMatchContext, setPendingMatchContext] = useState<{isQualifier: boolean, tournamentId?: string} | null>(null);
-
-  // Live Match Props
   const [liveMatchData, setLiveMatchData] = useState<{enemy: Team, mapId: string, context: string, fatiguePenalty: number} | null>(null);
+  
+  const [matchState, setMatchState] = useState<{
+    isLoading: boolean;
+    result: MatchResult | null;
+    currentEnemyId?: string;
+  }>({ isLoading: false, result: null });
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [messages, setMessages] = useState<Array<{id: number, subject: string, sender: string, read: boolean, body?: string, date: string}>>([]);
 
   useEffect(() => {
     const allLeagueTeams = TEAMS_BY_LEAGUE[myTeam.league];
@@ -98,14 +120,6 @@ export default function App() {
         setNextOpponent(null);
     }
   }, [schedule, leagueOpponents, nextOpponent]);
-
-  const [matchState, setMatchState] = useState<{
-    isLoading: boolean;
-    result: MatchResult | null;
-    currentEnemyId?: string;
-  }>({ isLoading: false, result: null });
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isMatchDay = schedule.some(m => 
     new Date(m.date).toDateString() === currentDate.toDateString() && !m.isPlayed
@@ -151,7 +165,64 @@ export default function App() {
     });
     
     const avgLeagueRating = Math.round(totalRating / (totalPlayers || 1));
-    const initialRoster = generateRoster(country, avgLeagueRating + 5, 0.5); 
+    
+    // Generate and Adjust Roster Age Logic
+    let initialRoster = generateRoster(country, avgLeagueRating + 5, 0.5);
+    
+    // 1. Find IGL and set age 21-23
+    const iglIndex = initialRoster.findIndex(p => p.role === PlayerRole.IGL);
+    if (iglIndex !== -1) {
+        initialRoster[iglIndex].age = 21 + Math.floor(Math.random() * 3); // 21, 22, 23
+    }
+
+    // 2. Pick one random non-IGL for age 16-17
+    const otherIndices = initialRoster.map((_, i) => i).filter(i => i !== iglIndex);
+    const youngsterIndex = otherIndices[Math.floor(Math.random() * otherIndices.length)];
+    initialRoster[youngsterIndex].age = 16 + Math.floor(Math.random() * 2); // 16, 17
+
+    // 3. Set remaining to 18-21
+    otherIndices.filter(i => i !== youngsterIndex).forEach(i => {
+        initialRoster[i].age = 18 + Math.floor(Math.random() * 4); // 18, 19, 20, 21
+    });
+
+    // Set initial messages
+    const countryName = COUNTRIES.find(c => c.code === country)?.name || country;
+    const startStr = "01/01/2024";
+
+    setMessages([
+        {
+            id: 1,
+            sender: "League Operations",
+            subject: "The Path to Glory - Welcome to Season 48",
+            read: false,
+            date: startStr,
+            body: `<p>Welcome to <b>Season 48</b>. You are beginning your journey in the <b>ESEA Open League</b>.</p><br><p><b>The Ladder:</b><br>ESEA Open &rarr; Intermediate &rarr; Main &rarr; Advanced &rarr; ESL Challenger &rarr; <span class="text-fm-accent">ESL Pro League</span></p><br><p><b>Season Rules:</b><br>The league follows a round-robin format. The top 8 teams will qualify for the playoffs. Only the playoff winner promotes to the next division.</p>`
+        },
+        {
+            id: 2,
+            sender: "Assistant Coach",
+            subject: "Training Report: Map Pool & Schedule Strategy",
+            read: false,
+            date: startStr,
+            body: `<p>Boss, I've set up the training facility. Here is how our map pool works:</p><ul class="list-disc pl-4 mt-2 space-y-1"><li><b>Permaban:</b> Starts at 0% Mastery. Very hard to improve.</li><li><b>First Pick:</b> Starts at 45% Mastery. Can reach 100%.</li><li><b>Focus Maps:</b> Start at 35% Mastery.</li><li><b>Rest:</b> Start at 20%. Capped at 85%.</li></ul><br><p><b>Warning:</b> Training the same map 5 days in a row causes fatigue (diminishing returns). Also, be careful with <b>Heavy</b> training intensity on match days - it will penalize our performance!</p>`
+        },
+        {
+            id: 3,
+            sender: "Head Analyst",
+            subject: "Tactical Briefing: Winning the Mental War",
+            read: false,
+            date: startStr,
+            body: `<p>Here is how we win tactical battles this season.</p><br><p>1. <b>Scout the Enemy:</b> Use the "Scout" button in the Match Lobby to reveal their strategy.</p><p>2. <b>Counter-Strat:</b><br>&bull; If they play <i>Aggressive</i> &rarr; We play <i>Passive</i>.<br>&bull; If they play <i>Passive</i> &rarr; We play <i>Default</i>.</p><p>3. <b>Timeouts:</b> You have 3 tactical timeouts per match. Use them to switch tactics mid-game based on my advice.</p>`
+        },
+        { 
+            id: 4, 
+            sender: "Scouting Network", 
+            subject: `New young talents found in ${countryName}`, 
+            read: false,
+            date: startStr,
+            body: `<p>Our scouting network in <b class="text-white">${countryName}</b> has identified several promising young players.</p><br><p>These recruits show exceptional ambition and the raw mechanical skill required to compete at a high level. Review the roster to see their roles and potential.</p>` 
+        }
+    ]);
     
     const maps = ['Dust2', 'Mirage', 'Inferno', 'Nuke', 'Train', 'Overpass', 'Ancient'];
     const mapStats: Record<string, number> = {};
@@ -191,12 +262,13 @@ export default function App() {
     setIsGameStarted(true);
   };
 
-  // --- PASSIVE TRAINING LOGIC ---
-  const processPassiveTraining = () => {
-    // If training already happened today (e.g., before the match), don't run it again.
-    if (isDailyTrainingComplete) return;
+  const handleMarkMessageRead = (id: number) => {
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
+  };
 
-    // Convert JS getDay() (0=Sun, 1=Mon) to our Schedule Index (0=Mon, 6=Sun)
+  // ... (Training logic) ...
+  const processPassiveTraining = () => {
+    if (isDailyTrainingComplete) return;
     const dayOfWeek = (currentDate.getDay() + 6) % 7; 
     const scheduledIntensity = myTeam.weeklySchedule[dayOfWeek];
     
@@ -205,21 +277,13 @@ export default function App() {
 
     switch (scheduledIntensity) {
         case TrainingIntensity.REST:
-            mentalChange = 10;
-            baseXp = 0;
-            break;
+            mentalChange = 10; baseXp = 0; break;
         case TrainingIntensity.LIGHT:
-            mentalChange = 5;
-            baseXp = 40; // Very low XP
-            break;
+            mentalChange = 5; baseXp = 40; break;
         case TrainingIntensity.MEDIUM:
-            mentalChange = -5;
-            baseXp = 80; // Medium XP
-            break;
+            mentalChange = -5; baseXp = 80; break;
         case TrainingIntensity.HEAVY:
-            mentalChange = -15;
-            baseXp = 150; // High XP, High Risk
-            break;
+            mentalChange = -15; baseXp = 150; break;
     }
 
     setMyTeam(prev => {
@@ -227,44 +291,25 @@ export default function App() {
             const player = { ...p };
             const xp = { ...player.xp };
             const stats = { ...player.stats };
-
-            // 1. Update Mental
             player.morale = Math.max(0, Math.min(100, player.morale + mentalChange));
-            
-            // Log Mental Change (only if significant)
             if (Math.abs(mentalChange) >= 5) {
                  setDailyGains(g => {
-                     // Don't spam logs, check if we already logged mental for this player
                      if(!g.some(l => l.type === 'mental' && l.subject === player.alias)) {
-                         return [...g, {
-                             type: 'mental',
-                             subject: player.alias,
-                             stat: 'MENTAL',
-                             value: mentalChange
-                         }]
+                         return [...g, { type: 'mental', subject: player.alias, stat: 'MENTAL', value: mentalChange }]
                      }
                      return g;
                  });
             }
 
-            // 2. Update XP (Passive)
             if (baseXp > 0) {
-                 // Randomization: +/- 20%
                 const variance = 0.8 + (Math.random() * 0.4);
                 const xpGain = Math.floor(baseXp * variance);
-
-                // Distribute XP across ALL stats lightly to represent general training
                 const allStats: (keyof typeof stats)[] = ['aim', 'reflex', 'strategy', 'utility', 'teamwork', 'clutch'];
-                
-                // Give a small portion of XP to 3 random stats
                 for(let i=0; i<3; i++) {
                     const randomStat = allStats[Math.floor(Math.random() * allStats.length)];
                     const portion = Math.floor(xpGain / 3);
-
                     if (stats[randomStat] < 99) {
                         xp[randomStat] += portion;
-                        
-                        // Level Up Check
                         let req = 500 + (stats[randomStat] * 50);
                         while (xp[randomStat] >= req && stats[randomStat] < 99) {
                             xp[randomStat] -= req;
@@ -273,29 +318,19 @@ export default function App() {
                         }
                     }
                 }
-                
                 setDailyGains(g => {
                     if(!g.some(l => l.type === 'passive' && l.subject === player.alias)) {
-                         return [...g, {
-                            type: 'passive',
-                            subject: player.alias,
-                            stat: 'GENERAL', // Generic label for passive
-                            value: xpGain
-                        }]
+                         return [...g, { type: 'passive', subject: player.alias, stat: 'GENERAL', value: xpGain }]
                     }
                     return g;
                 });
             }
-
             player.xp = xp;
             player.stats = stats;
             return player;
         });
-
         return { ...prev, players: updatedPlayers };
     });
-
-    // Mark training as complete for the day
     setIsDailyTrainingComplete(true);
   };
 
@@ -305,12 +340,7 @@ export default function App() {
         setTimeout(() => setErrorMessage(null), 3000);
         return;
     }
-    
-    // Logic: Non-match days run training on advance.
-    // Match days run training BEFORE the match start.
-    // processPassiveTraining handles the "already ran" check internally.
     processPassiveTraining();
-    
     setShowDaySummary(true);
   };
 
@@ -318,10 +348,7 @@ export default function App() {
       setShowDaySummary(false);
       setDailyGains([]); 
       setDailyActivities({ mapTraining: false, individualDrills: 0 });
-      
-      // Reset the training flag for the new day
       setIsDailyTrainingComplete(false);
-      
       const newDate = new Date(currentDate);
       newDate.setDate(newDate.getDate() + 1);
       setCurrentDate(newDate);
@@ -330,102 +357,54 @@ export default function App() {
   const handleHirePlayer = (player: Player) => {
     if (myTeam.players.length >= 5) return;
     if (myTeam.budget < player.marketValue) return;
-
-    setMyTeam(prev => ({
-      ...prev,
-      players: [...prev.players, player],
-      budget: prev.budget - player.marketValue
-    }));
+    setMyTeam(prev => ({ ...prev, players: [...prev.players, player], budget: prev.budget - player.marketValue }));
   };
 
   const handleFirePlayer = (player: Player) => {
-    setMyTeam(prev => ({
-      ...prev,
-      players: prev.players.filter(p => p.id !== player.id),
-      budget: prev.budget + Math.floor(player.marketValue * 0.5)
-    }));
+    setMyTeam(prev => ({ ...prev, players: prev.players.filter(p => p.id !== player.id), budget: prev.budget + Math.floor(player.marketValue * 0.5) }));
   };
 
-  // --- TRAINING LOGIC ---
   const handleTraining = (mapId: string, skill: keyof MapPracticeStats) => {
       if (dailyActivities.mapTraining) return;
-
       setMyTeam(prev => {
           const currentProficiency = prev.mapStats[mapId] || 0;
           const isFirstPick = prev.firstPickMap === mapId;
           const maxCap = isFirstPick ? 100 : 85;
-
           if (currentProficiency >= maxCap) {
               setErrorMessage(isFirstPick ? "Map Mastery already at MAX!" : "Map capped at 85%. Only your First Pick can reach 100%.");
               setTimeout(() => setErrorMessage(null), 4000);
               return prev; 
           }
-
           let newStreak = 1;
-          if (prev.lastTrainedMapId === mapId) {
-              newStreak = (prev.consecutiveMapTrainCount || 0) + 1;
-          }
-
+          if (prev.lastTrainedMapId === mapId) { newStreak = (prev.consecutiveMapTrainCount || 0) + 1; }
           let gain = 1.0; 
           if (currentProficiency >= 75) gain = 0.25;
           else if (currentProficiency >= 50) gain = 0.5;
-
-          const isFatigued = newStreak >= 5;
-          if (isFatigued) {
-              gain = gain * 0.5;
-          }
-
+          if (newStreak >= 5) gain = gain * 0.5;
           const currentPractice = prev.practiceStats?.[mapId] || { pistol: 0, ct: 0, t: 0, strat: 0 };
           const improvement = (gain * 4);
           const newSkillValue = Math.min(100, currentPractice[skill] + improvement);
-          
-          const newPracticeStatsForMap = {
-              ...currentPractice,
-              [skill]: newSkillValue
-          };
-          
+          const newPracticeStatsForMap = { ...currentPractice, [skill]: newSkillValue };
           const totalSkill = newPracticeStatsForMap.pistol + newPracticeStatsForMap.ct + newPracticeStatsForMap.t + newPracticeStatsForMap.strat;
-          const rawMastery = totalSkill / 4;
-          const newMapMastery = Math.min(maxCap, rawMastery);
-
+          const newMapMastery = Math.min(maxCap, totalSkill / 4);
           const updatedMapStats = { ...prev.mapStats };
           const updatedPracticeStats = { ...prev.practiceStats };
-
           updatedPracticeStats[mapId] = newPracticeStatsForMap;
           updatedMapStats[mapId] = newMapMastery;
-
-          // DECAY LOGIC REMOVED BY REQUEST
-
-          setDailyGains(g => [...g, { 
-             type: 'map', 
-             subject: mapId, 
-             stat: (skill as string).toUpperCase(),
-             value: improvement 
-          }]);
-
-          return {
-              ...prev,
-              practiceStats: updatedPracticeStats,
-              mapStats: updatedMapStats,
-              lastTrainedMapId: mapId,
-              consecutiveMapTrainCount: newStreak
-          };
+          setDailyGains(g => [...g, { type: 'map', subject: mapId, stat: (skill as string).toUpperCase(), value: improvement }]);
+          return { ...prev, practiceStats: updatedPracticeStats, mapStats: updatedMapStats, lastTrainedMapId: mapId, consecutiveMapTrainCount: newStreak };
       });
-
       setDailyActivities(prev => ({ ...prev, mapTraining: true }));
   };
 
   const handleIndividualTraining = (playerId: string, drillType: DrillType) => {
       if (dailyActivities.individualDrills >= 3) return;
-
       setMyTeam(prev => {
           const players = prev.players.map(p => {
               if (p.id !== playerId) return p;
-
               const player = { ...p };
               const stats = { ...player.stats };
               const xp = { ...(player.xp || { aim: 0, reflex: 0, strategy: 0, clutch: 0, utility: 0, teamwork: 0 }) };
-
               const drillConfig: Record<string, { main: keyof typeof stats, sub: keyof typeof stats }> = {
                   'DEATHMATCH': { main: 'aim', sub: 'reflex' },
                   'RETAKE': { main: 'clutch', sub: 'strategy' },
@@ -434,52 +413,28 @@ export default function App() {
                   'SCRIM': { main: 'teamwork', sub: 'clutch' },
                   'REACTION': { main: 'reflex', sub: 'aim' },
               };
-
               const config = drillConfig[drillType];
-              
               const totalXpGain = Math.floor(Math.random() * 201) + 400;
-              
               const mainGain = Math.floor(totalXpGain * 0.7);
               const subGain = totalXpGain - mainGain;
-
               const applyXp = (stat: keyof typeof stats, gain: number) => {
                    if (stats[stat] >= 99) return; 
                    xp[stat] += gain;
-                   setDailyGains(g => [...g, {
-                       type: 'xp',
-                       subject: player.alias,
-                       stat: (stat as string).toUpperCase(),
-                       value: gain
-                   }]);
-
+                   setDailyGains(g => [...g, { type: 'xp', subject: player.alias, stat: (stat as string).toUpperCase(), value: gain }]);
                    let req = 500 + (stats[stat] * 50);
                    while (xp[stat] >= req && stats[stat] < 99) {
-                       xp[stat] -= req;
-                       stats[stat] += 1;
-                       req = 500 + (stats[stat] * 50);
+                       xp[stat] -= req; stats[stat] += 1; req = 500 + (stats[stat] * 50);
                    }
               };
-
               applyXp(config.main, mainGain);
               applyXp(config.sub, subGain);
-
-              // Handle Mental impact of drills
-              // Scrim adds mental, others slightly drain
-              if (drillType === 'SCRIM') {
-                  player.morale = Math.min(100, player.morale + 5);
-              } else {
-                  player.morale = Math.max(0, player.morale - 2);
-              }
-
-              player.stats = stats;
-              player.xp = xp;
-              
+              if (drillType === 'SCRIM') player.morale = Math.min(100, player.morale + 5);
+              else player.morale = Math.max(0, player.morale - 2);
+              player.stats = stats; player.xp = xp;
               return player;
           });
-
           return { ...prev, players };
       });
-
       setDailyActivities(prev => ({ ...prev, individualDrills: prev.individualDrills + 1 }));
   };
 
@@ -496,56 +451,16 @@ export default function App() {
           const newMapStats = { ...prev.mapStats };
           const newPracticeStats = { ...prev.practiceStats };
           const maps = Object.keys(newMapStats);
-
           maps.forEach(mapId => {
               let val = 20; 
               if (mapId === permaban) val = 0;
               else if (mapId === firstPick) val = 45;
               else if (focusMaps.includes(mapId)) val = 35;
-
               newMapStats[mapId] = val;
               newPracticeStats[mapId] = { pistol: val, ct: val, t: val, strat: val };
           });
-
-          return {
-              ...prev,
-              mapStats: newMapStats,
-              practiceStats: newPracticeStats,
-              permaban: permaban,
-              firstPickMap: firstPick,
-              isMapPoolInitialized: true
-          };
+          return { ...prev, mapStats: newMapStats, practiceStats: newPracticeStats, permaban: permaban, firstPickMap: firstPick, isMapPoolInitialized: true };
       });
-  };
-
-  const handleAnalyzeOpponent = async () => {
-    if (!nextOpponent) return;
-    setIsAnalyzing(true);
-    setAnalysisTimer(30);
-
-    const timerInterval = setInterval(() => {
-      setAnalysisTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerInterval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    try {
-        const apiCallPromise = analyzeMatchup(myTeam, nextOpponent);
-        const delayPromise = new Promise(resolve => setTimeout(resolve, 30000));
-        const [result] = await Promise.all([apiCallPromise, delayPromise]);
-        setAnalysis(result);
-    } catch (e) {
-        console.error(e);
-        setErrorMessage("Failed to generate analysis.");
-    } finally {
-        clearInterval(timerInterval);
-        setAnalysisTimer(0);
-        setIsAnalyzing(false);
-    }
   };
 
   const getMyLeagueRank = () => {
@@ -558,58 +473,67 @@ export default function App() {
       return sortedTeams.findIndex(t => t.id === myTeam.id) + 1;
   };
 
-  const enterVeto = (isQualifier: boolean = false, tournamentId?: string) => {
+  // Match Entry Flow
+  const enterMatchLobby = (isQualifier: boolean = false, tournamentId?: string) => {
       if (myTeam.players.length < 5) {
         setErrorMessage("You need 5 players to start a match!");
         setTimeout(() => setErrorMessage(null), 3000);
         return;
       }
-
       if (!isQualifier && !isMatchDay) {
          setErrorMessage("No match scheduled for today. Advance to the next match date.");
          setTimeout(() => setErrorMessage(null), 3000);
          return; 
       }
-      
-      // CRITICAL: Execute morning training BEFORE entering the match context
-      // This ensures mental fatigue/buffs from the schedule are applied for the match
       if (!isDailyTrainingComplete) {
           processPassiveTraining();
       }
-
       setPendingMatchContext({ isQualifier, tournamentId });
-      setView(GameView.MAP_VETO);
+      setView(GameView.MATCH_LOBBY);
   }
 
-  const handleSetTactic = (tactic: Tactic) => {
-      setMyTeam(prev => ({ ...prev, preferredTactic: tactic }));
+  const handleStartVeto = () => {
+      setView(GameView.MAP_VETO);
+  };
+  
+  const handleAnalyzeOpponent = async () => {
+    if (!nextOpponent) return;
+    if (myTeam.budget < 1500) {
+        setErrorMessage("Not enough money ($1500 required) to scout opponent.");
+        setTimeout(() => setErrorMessage(null), 3000);
+        return;
+    }
+    setIsAnalyzing(true);
+    try {
+        setMyTeam(prev => ({...prev, budget: prev.budget - 1500}));
+        const result = await analyzeMatchup(myTeam, nextOpponent);
+        setAnalysis(result);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsAnalyzing(false);
+    }
   };
 
   const startMatchSimulation = (mapId: string) => {
-    if (!pendingMatchContext) return;
-    const { isQualifier, tournamentId } = pendingMatchContext;
-
-    const enemy = isQualifier ? leagueOpponents[Math.floor(Math.random() * leagueOpponents.length)] : (nextOpponent || leagueOpponents[0]);
+    const contextData = pendingMatchContext || { isQualifier: false, tournamentId: undefined };
+    const { isQualifier, tournamentId } = contextData;
+    const enemy = isQualifier 
+        ? leagueOpponents[Math.floor(Math.random() * leagueOpponents.length)] 
+        : (nextOpponent || leagueOpponents[0]);
+    
     let context = `${myTeam.league} League Match`;
     if (isQualifier && tournamentId) {
       const tourney = tournaments.find(t => t.id === tournamentId);
       if (tourney) context = `Qualifier Match for ${tourney.name}`;
     }
 
-    // Calculate Fatigue Penalty based on TODAY'S schedule intensity
-    // Convert JS getDay() (0=Sun) to our Schedule Index (0=Mon)
     const dayOfWeek = (currentDate.getDay() + 6) % 7; 
     const intensity = myTeam.weeklySchedule[dayOfWeek];
     let fatiguePenalty = 0;
+    if (intensity === TrainingIntensity.HEAVY) fatiguePenalty = 0.20;
+    else if (intensity === TrainingIntensity.MEDIUM) fatiguePenalty = 0.10;
 
-    if (intensity === TrainingIntensity.HEAVY) {
-        fatiguePenalty = 0.20; // 20% Penalty for Heavy on Match Day
-    } else if (intensity === TrainingIntensity.MEDIUM) {
-        fatiguePenalty = 0.10; // 10% Penalty for Medium on Match Day
-    }
-    // Light & Rest have 0% penalty
-
-    // Instead of running logic here, we prepare data for MatchView
     setLiveMatchData({ enemy, mapId, context, fatiguePenalty });
     setMatchState({ isLoading: false, result: null, currentEnemyId: enemy.id });
     setView(GameView.MATCH_LIVE);
@@ -618,89 +542,43 @@ export default function App() {
   const simulateLeagueRound = (userResult: MatchResult, opponentId: string) => {
     const roundResults: LeagueRoundResult[] = [];
     const updatedTeamsMap = new Map<string, Partial<Team>>();
-
     let actualOpponentId = opponentId;
     let userOpponent = leagueOpponents.find(t => t.id === opponentId);
-
     if (!userOpponent && userResult.enemyTeamName) {
         userOpponent = leagueOpponents.find(t => t.name.toLowerCase() === userResult.enemyTeamName.toLowerCase());
-        if (userOpponent) {
-            actualOpponentId = userOpponent.id;
-        }
+        if (userOpponent) actualOpponentId = userOpponent.id;
     }
-
     roundResults.push({
-        teamA: myTeam.name,
-        teamB: userResult.enemyTeamName,
-        scoreA: userResult.finalScoreUs,
-        scoreB: userResult.finalScoreEnemy,
+        teamA: myTeam.name, teamB: userResult.enemyTeamName, scoreA: userResult.finalScoreUs, scoreB: userResult.finalScoreEnemy,
         winner: userResult.finalScoreUs > userResult.finalScoreEnemy ? myTeam.name : userResult.enemyTeamName
     });
-
     const opponentPoints = userResult.finalScoreEnemy > userResult.finalScoreUs ? 3 : 0;
     const opponentRd = userResult.finalScoreEnemy - userResult.finalScoreUs;
-    
     if (userOpponent) {
       updatedTeamsMap.set(userOpponent.id, {
-        matchesPlayed: userOpponent.matchesPlayed + 1,
-        wins: userOpponent.wins + (userResult.finalScoreEnemy > userResult.finalScoreUs ? 1 : 0),
-        losses: userOpponent.losses + (userResult.finalScoreEnemy > userResult.finalScoreUs ? 0 : 1),
-        leaguePoints: userOpponent.leaguePoints + opponentPoints,
+        matchesPlayed: userOpponent.matchesPlayed + 1, wins: userOpponent.wins + (userResult.finalScoreEnemy > userResult.finalScoreUs ? 1 : 0),
+        losses: userOpponent.losses + (userResult.finalScoreEnemy > userResult.finalScoreUs ? 0 : 1), leaguePoints: userOpponent.leaguePoints + opponentPoints,
         roundDifference: userOpponent.roundDifference + opponentRd
       });
     }
-
     let remainingTeams = leagueOpponents.filter(t => t.id !== actualOpponentId);
     remainingTeams = remainingTeams.sort(() => 0.5 - Math.random());
-
     for (let i = 0; i < remainingTeams.length; i += 2) {
         const teamA = remainingTeams[i];
         const teamB = remainingTeams[i + 1];
-
         if (!teamB) {
-            updatedTeamsMap.set(teamA.id, {
-                 matchesPlayed: teamA.matchesPlayed + 1,
-                 leaguePoints: teamA.leaguePoints + 3, 
-                 wins: teamA.wins + 1,
-                 roundDifference: teamA.roundDifference + 1
-            });
+            updatedTeamsMap.set(teamA.id, { matchesPlayed: teamA.matchesPlayed + 1, leaguePoints: teamA.leaguePoints + 3, wins: teamA.wins + 1, roundDifference: teamA.roundDifference + 1 });
             continue;
         }
-
         const scoreA = Math.random() > 0.5 ? 13 : Math.floor(Math.random() * 11);
         const scoreB = scoreA === 13 ? Math.floor(Math.random() * 11) : 13;
         const winner = scoreA > scoreB ? teamA : teamB;
-        
-        roundResults.push({
-            teamA: teamA.name,
-            teamB: teamB.name,
-            scoreA: scoreA,
-            scoreB: scoreB,
-            winner: winner.name
-        });
-
-        updatedTeamsMap.set(teamA.id, {
-            matchesPlayed: teamA.matchesPlayed + 1,
-            wins: teamA.wins + (teamA === winner ? 1 : 0),
-            losses: teamA.losses + (teamA === winner ? 0 : 1),
-            leaguePoints: teamA.leaguePoints + (teamA === winner ? 3 : 0),
-            roundDifference: teamA.roundDifference + (scoreA - scoreB)
-        });
-
-        updatedTeamsMap.set(teamB.id, {
-            matchesPlayed: teamB.matchesPlayed + 1,
-            wins: teamB.wins + (teamB === winner ? 1 : 0),
-            losses: teamB.losses + (teamB === winner ? 0 : 1),
-            leaguePoints: teamB.leaguePoints + (teamB === winner ? 3 : 0),
-            roundDifference: teamB.roundDifference + (scoreB - scoreA)
-        });
+        roundResults.push({ teamA: teamA.name, teamB: teamB.name, scoreA: scoreA, scoreB: scoreB, winner: winner.name });
+        updatedTeamsMap.set(teamA.id, { matchesPlayed: teamA.matchesPlayed + 1, wins: teamA.wins + (teamA === winner ? 1 : 0), losses: teamA.losses + (teamA === winner ? 0 : 1), leaguePoints: teamA.leaguePoints + (teamA === winner ? 3 : 0), roundDifference: teamA.roundDifference + (scoreA - scoreB) });
+        updatedTeamsMap.set(teamB.id, { matchesPlayed: teamB.matchesPlayed + 1, wins: teamB.wins + (teamB === winner ? 1 : 0), losses: teamB.losses + (teamB === winner ? 0 : 1), leaguePoints: teamB.leaguePoints + (teamB === winner ? 3 : 0), roundDifference: teamB.roundDifference + (scoreB - scoreA) });
     }
-
     setLatestRoundResults(roundResults);
-    setLeagueOpponents(prev => prev.map(t => {
-        const updates = updatedTeamsMap.get(t.id);
-        return updates ? { ...t, ...updates } : t;
-    }));
+    setLeagueOpponents(prev => prev.map(t => { const updates = updatedTeamsMap.get(t.id); return updates ? { ...t, ...updates } : t; }));
   };
 
   const handleMatchComplete = (result: MatchResult) => {
@@ -733,15 +611,11 @@ export default function App() {
           roundDifference: myTeam.roundDifference + rd,
           budget: myTeam.budget + result.earnings
       };
-      
       setMyTeam(updatedMyTeam);
 
       const opponentId = matchState.currentEnemyId;
-      if (opponentId) {
-          simulateLeagueRound(result, opponentId);
-      } else {
-          simulateLeagueRound(result, "unknown");
-      }
+      if (opponentId) simulateLeagueRound(result, opponentId);
+      else simulateLeagueRound(result, "unknown");
 
       const nextMatchIdx = schedule.findIndex(m => !m.isPlayed);
       if (nextMatchIdx !== -1) {
@@ -749,411 +623,156 @@ export default function App() {
           newSched[nextMatchIdx].isPlayed = true;
           setSchedule(newSched);
       }
-
       setView(GameView.DASHBOARD);
+  };
+
+  const handleSetTactic = (tactic: Tactic) => {
+      setMyTeam(prev => ({ ...prev, preferredTactic: tactic }));
   };
 
   const getAggregatedGains = () => {
     const aggregated: Record<string, DailyGain> = {};
     dailyGains.forEach(gain => {
         const key = `${gain.subject}_${gain.stat}`;
-        if (aggregated[key]) {
-            aggregated[key].value += gain.value;
-        } else {
-            aggregated[key] = { ...gain };
-        }
+        if (aggregated[key]) aggregated[key].value += gain.value;
+        else aggregated[key] = { ...gain };
     });
     return Object.values(aggregated);
   };
 
   return (
-    <div className="min-h-screen bg-cs-darker text-white font-sans">
+    <div className="flex h-screen bg-fm-bg text-fm-text font-sans overflow-hidden">
       {!isGameStarted ? (
         <StartScreen onStartGame={handleStartGame} />
       ) : (
         <>
-          <Header 
-            team={myTeam} 
-            currentView={view} 
-            setView={setView} 
-            currentDate={currentDate}
-            onAdvanceDay={() => advanceDay(1)}
-            isMatchDay={isMatchDay}
-          />
+          {/* SIDEBAR NAVIGATION */}
+          <Sidebar currentView={view} setView={setView} />
+          
+          {/* MAIN CONTENT AREA */}
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+              <Header team={myTeam} currentView={view} currentDate={currentDate} onAdvanceDay={() => advanceDay(1)} isMatchDay={isMatchDay} />
 
-          {/* DAY SUMMARY MODAL */}
-          {showDaySummary && (
-              <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6">
-                  <div className="max-w-3xl w-full bg-cs-dark border border-gray-800 rounded-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-                      <div className="bg-gradient-to-r from-cs-blue/20 to-transparent p-6 border-b border-gray-800">
-                          <div className="flex items-center justify-between">
-                              <div>
-                                  <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white mb-1">Day Complete</h2>
-                                  <p className="text-gray-400 text-sm flex items-center gap-2">
-                                      <Calendar size={14} /> 
-                                      {currentDate.toLocaleDateString()} &rarr; {new Date(currentDate.getTime() + 86400000).toLocaleDateString()}
-                                  </p>
-                              </div>
-                              <CheckCircle size={48} className="text-cs-blue opacity-50" />
-                          </div>
+              <div className="flex-1 overflow-y-auto relative bg-fm-bg">
+                  {/* MAIN VIEW SWITCHER */}
+                  {view === GameView.DASHBOARD && (
+                      <Dashboard 
+                          team={myTeam}
+                          nextScheduledMatch={nextScheduledMatch}
+                          nextOpponent={nextOpponent}
+                          leagueRank={getMyLeagueRank()}
+                          leagueOpponents={leagueOpponents}
+                          onPlayMatch={() => enterMatchLobby(false)}
+                          onViewLeague={() => setView(GameView.LEAGUE)}
+                          isAnalyzing={isAnalyzing}
+                          messages={messages}
+                          onMarkMessageRead={handleMarkMessageRead}
+                      />
+                  )}
+
+                  {view === GameView.MATCH_LOBBY && nextOpponent && (
+                      <MatchLobby 
+                          myTeam={myTeam} 
+                          opponent={nextOpponent}
+                          analysis={analysis}
+                          isAnalyzing={isAnalyzing}
+                          onAnalyze={handleAnalyzeOpponent}
+                          onStartMatch={handleStartVeto}
+                          onSetTactic={handleSetTactic}
+                      />
+                  )}
+
+                  {view === GameView.MAP_VETO && nextOpponent && (
+                      <MapVeto 
+                          userTeam={myTeam}
+                          enemyTeam={nextOpponent}
+                          onComplete={(mapId) => startMatchSimulation(mapId)}
+                      />
+                  )}
+
+                  {view === GameView.MATCH_LIVE && liveMatchData && (
+                      <div className="absolute inset-0 z-50 bg-black">
+                        <MatchView 
+                            playerTeam={myTeam}
+                            enemyTeam={liveMatchData.enemy}
+                            mapId={liveMatchData.mapId}
+                            context={liveMatchData.context}
+                            onComplete={handleMatchComplete}
+                            fatiguePenalty={liveMatchData.fatiguePenalty} 
+                        />
                       </div>
+                  )}
 
-                      <div className="flex-1 overflow-y-auto p-6">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                              <div>
-                                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                      <Zap size={16} className="text-cs-yellow" /> Daily Progress
-                                  </h3>
-                                  {dailyGains.length > 0 ? (
-                                      <div className="space-y-2">
-                                          {getAggregatedGains().map((gain, i) => (
-                                              <div key={i} className="bg-gray-900/50 p-3 rounded border border-gray-800 flex items-center justify-between">
-                                                  <div className="flex items-center gap-3">
-                                                      <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-xs 
-                                                        ${gain.type === 'map' ? 'bg-blue-900/20 text-blue-400' : 
-                                                          gain.type === 'passive' ? 'bg-purple-900/20 text-purple-400' :
-                                                          gain.type === 'mental' ? 'bg-pink-900/20 text-pink-400' :
-                                                          'bg-yellow-900/20 text-yellow-400'}`}>
-                                                          {gain.type === 'map' ? 'MAP' : gain.type === 'passive' ? 'PLAN' : gain.type === 'mental' ? 'MIND' : 'XP'}
-                                                      </div>
-                                                      <div>
-                                                          <div className="font-bold text-sm text-white">{gain.subject}</div>
-                                                          <div className="text-[10px] text-gray-500 uppercase font-bold">{gain.stat}</div>
-                                                      </div>
-                                                  </div>
-                                                  <div className={`font-mono font-bold flex items-center ${gain.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                                      {gain.value > 0 ? <ArrowUp size={12} /> : null}
-                                                      {gain.type === 'map' ? gain.value.toFixed(1) + '%' : (gain.value > 0 ? '+' : '') + gain.value + (gain.type === 'mental' ? '' : ' XP')}
-                                                  </div>
-                                              </div>
-                                          ))}
-                                      </div>
-                                  ) : (
-                                      <div className="text-center py-8 bg-gray-900/30 rounded border border-gray-800 border-dashed">
-                                          <p className="text-gray-500 text-sm">No training activities recorded today.</p>
-                                      </div>
-                                  )}
-                              </div>
-
-                              <div>
-                                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                      <Trophy size={16} className="text-gray-400" /> League Update
-                                  </h3>
-                                  <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 mb-4">
-                                      <div className="flex justify-between items-end mb-2">
-                                          <div className="text-xs text-gray-500 uppercase font-bold">Current Record</div>
-                                          <div className="text-xl font-mono font-bold text-white">
-                                              <span className="text-green-400">{myTeam.wins}W</span> - <span className="text-red-400">{myTeam.losses}L</span>
-                                          </div>
-                                      </div>
-                                      <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
-                                          <div className="bg-cs-blue h-full" style={{ width: `${(myTeam.matchesPlayed / 15) * 100}%` }}></div>
-                                      </div>
-                                      <div className="text-[10px] text-right text-gray-500 mt-1">{myTeam.matchesPlayed}/15 Matches Played</div>
-                                  </div>
-
-                                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4 mt-6 flex items-center gap-2">
-                                      <Target size={16} className="text-t-red" /> Up Next
-                                  </h3>
-                                  {nextScheduledMatch ? (
-                                      <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-4 rounded-lg border border-gray-700">
-                                          <div className="flex justify-between items-start">
-                                              <div>
-                                                  <div className="text-[10px] text-gray-500 uppercase font-bold mb-1">
-                                                      {new Date(nextScheduledMatch.date).toLocaleDateString()}
-                                                  </div>
-                                                  <div className="text-lg font-black text-white">
-                                                      VS {nextOpponent?.name || "TBD"}
-                                                  </div>
-                                              </div>
-                                              {isMatchDay && (
-                                                  <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded animate-pulse">MATCH DAY</span>
-                                              )}
-                                          </div>
-                                      </div>
-                                  ) : (
-                                      <div className="text-gray-500 text-sm italic">No upcoming matches.</div>
-                                  )}
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="p-6 bg-cs-dark border-t border-gray-800 flex justify-center">
-                          <button 
-                              onClick={handleConfirmDayAdvance}
-                              className="px-8 py-3 bg-cs-yellow hover:bg-yellow-400 text-black font-black uppercase tracking-widest rounded shadow-lg transition-transform hover:scale-105 flex items-center gap-2"
-                          >
-                              Start Next Day <ArrowRight size={20} />
-                          </button>
-                      </div>
-                  </div>
+                  {view === GameView.LEAGUE && ( <LeagueView myTeam={myTeam} opponents={leagueOpponents} roundResults={latestRoundResults} /> )}
+                  {view === GameView.PRACTICE && ( <PracticeView team={myTeam} schedule={schedule} currentDate={currentDate} onTrain={handleTraining} onIndividualTrain={handleIndividualTraining} onUpdateSchedule={handleUpdateSchedule} onSetupComplete={handleInitialMapSetup} dailyActivities={dailyActivities} isDailyTrainingComplete={isDailyTrainingComplete} /> )}
+                  {view === GameView.MARKET && ( <MarketView budget={myTeam.budget} onHire={handleHirePlayer} currentRosterCount={myTeam.players.length} /> )}
+                  {view === GameView.SCHEDULE && ( <ScheduleView tournaments={tournaments} currentDate={currentDate} team={myTeam} schedule={schedule} onQualify={(tId) => enterMatchLobby(true, tId)} /> )}
+                  {view === GameView.RANKINGS && ( <RankingsView /> )}
               </div>
-          )}
 
-          <div className="relative">
-            {errorMessage && (
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500/90 text-white px-6 py-3 rounded-lg shadow-2xl z-50 flex items-center gap-3 animate-bounce">
-                <AlertTriangle size={24} />
-                <span className="font-bold">{errorMessage}</span>
-              </div>
-            )}
-
-            {view === GameView.DASHBOARD && (
-               <div className="p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 space-y-6">
-                      <div className="bg-cs-dark border border-gray-800 rounded-lg p-6">
-                          <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                              <Scan className="text-cs-yellow" /> Active Roster
-                          </h2>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {myTeam.players.map(p => (
-                                  <PlayerCard 
-                                    key={p.id} 
-                                    player={p} 
-                                    actionLabel="Release"
-                                    onAction={handleFirePlayer}
-                                    isCompact={true}
-                                    showTeamwork={true}
-                                  />
-                              ))}
-                              {myTeam.players.length < 5 && (
-                                  <div 
-                                    onClick={() => setView(GameView.MARKET)}
-                                    className="border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center p-8 text-gray-500 hover:text-cs-yellow hover:border-cs-yellow hover:bg-gray-800/50 transition-all cursor-pointer h-full min-h-[160px]"
-                                  >
-                                      <span className="text-4xl font-thin mb-2">+</span>
-                                      <span className="font-bold uppercase tracking-widest">Sign Player</span>
+              {/* OVERLAYS */}
+              {showDaySummary && (
+                  <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+                      <div className="max-w-3xl w-full bg-fm-card border border-fm-border rounded-xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                          <div className="bg-fm-card-hover p-6 border-b border-fm-border">
+                              <div className="flex items-center justify-between">
+                                  <div>
+                                      <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-1">Day Complete</h2>
+                                      <p className="text-fm-muted text-sm flex items-center gap-2">
+                                          <Calendar size={14} /> 
+                                          {currentDate.toLocaleDateString()} &rarr; {new Date(currentDate.getTime() + 86400000).toLocaleDateString()}
+                                      </p>
                                   </div>
-                              )}
+                                  <CheckCircle size={48} className="text-fm-accent opacity-50" />
+                              </div>
+                          </div>
+                          <div className="flex-1 overflow-y-auto p-6">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                  <div>
+                                      <h3 className="text-xs font-bold text-fm-muted uppercase tracking-widest mb-4 flex items-center gap-2">
+                                          <Zap size={14} className="text-fm-accent" /> Daily Progress
+                                      </h3>
+                                      {dailyGains.length > 0 ? (
+                                          <div className="space-y-2">
+                                              {getAggregatedGains().map((gain, i) => (
+                                                  <div key={i} className="bg-fm-bg/50 p-3 rounded border border-fm-border flex items-center justify-between">
+                                                      <div className="flex items-center gap-3">
+                                                          <div className={`w-6 h-6 rounded flex items-center justify-center font-bold text-[10px] ${gain.type === 'map' ? 'bg-blue-900/20 text-blue-400' : gain.type === 'passive' ? 'bg-purple-900/20 text-purple-400' : gain.type === 'mental' ? 'bg-pink-900/20 text-pink-400' : 'bg-yellow-900/20 text-yellow-400'}`}>
+                                                              {gain.type === 'map' ? 'MAP' : gain.type === 'passive' ? 'PLAN' : gain.type === 'mental' ? 'MIND' : 'XP'}
+                                                          </div>
+                                                          <div>
+                                                              <div className="font-bold text-xs text-white">{gain.subject}</div>
+                                                              <div className="text-[9px] text-gray-500 uppercase font-bold">{gain.stat}</div>
+                                                          </div>
+                                                      </div>
+                                                      <div className={`font-mono font-bold text-xs ${gain.value >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                                          {gain.value > 0 ? '+' : ''}{gain.value}
+                                                      </div>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      ) : (
+                                          <div className="text-center py-8 bg-fm-bg/30 rounded border border-fm-border border-dashed">
+                                              <p className="text-gray-500 text-xs">No training activities recorded today.</p>
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="p-6 bg-fm-card border-t border-fm-border flex justify-center">
+                              <button onClick={handleConfirmDayAdvance} className="px-8 py-3 bg-fm-accent hover:bg-fm-accent-hover text-white font-bold uppercase tracking-widest rounded shadow-lg transition-transform hover:scale-105 flex items-center gap-2 text-sm">
+                                  Start Next Day <ArrowRight size={16} />
+                              </button>
                           </div>
                       </div>
                   </div>
-
-                  <div className="space-y-6">
-                      <div className="bg-cs-dark border border-gray-800 rounded-lg p-6 shadow-lg relative overflow-hidden">
-                          <div className="absolute top-0 right-0 p-4 opacity-5">
-                              <Crosshair size={120} />
-                          </div>
-                          <h2 className="text-xl font-bold mb-4 text-gray-200">Next Opponent</h2>
-                          
-                          {nextScheduledMatch ? (
-                              <div className="relative z-10">
-                                  <div className="text-center mb-6">
-                                      <div className="text-4xl font-black text-white tracking-tighter mb-1">
-                                          {nextOpponent?.name || "TBD"}
-                                      </div>
-                                      <div className="text-cs-yellow font-mono text-sm">
-                                          {nextOpponent ? `Rank #${nextOpponent.rankingPoints || 'Unranked'}` : 'Pending'}
-                                      </div>
-                                  </div>
-
-                                  {isAnalyzing ? (
-                                      <div className="bg-gray-900/80 rounded p-4 mb-4 border border-cs-blue/30">
-                                          <div className="flex justify-between items-center mb-2">
-                                              <span className="text-xs font-bold text-cs-blue uppercase animate-pulse">
-                                                  Analyzing Demos...
-                                              </span>
-                                              <span className="text-sm font-mono text-white">{analysisTimer}s</span>
-                                          </div>
-                                          <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                                              <div 
-                                                  className="h-full bg-cs-blue transition-all duration-1000 ease-linear" 
-                                                  style={{ width: `${((30 - analysisTimer) / 30) * 100}%` }}
-                                              ></div>
-                                          </div>
-                                      </div>
-                                  ) : analysis ? (
-                                      <div className="bg-gray-900/80 rounded p-4 text-sm space-y-2 border border-gray-700 mb-4 animate-fade-in">
-                                          <div className="flex items-start gap-2 mb-3">
-                                              <BrainCircuit size={16} className="text-cs-blue mt-0.5 shrink-0" />
-                                              <p className="text-gray-300 italic">"{analysis.overview}"</p>
-                                          </div>
-                                          
-                                          <div className="grid grid-cols-2 gap-2 mb-3">
-                                              <div>
-                                                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-green-400 mb-1">
-                                                      <ThumbsUp size={10} /> Strengths
-                                                  </div>
-                                                  <ul className="list-disc list-inside text-xs text-gray-400">
-                                                      {analysis.strengths.map((s, i) => <li key={i} className="truncate" title={s}>{s}</li>)}
-                                                  </ul>
-                                              </div>
-                                              <div>
-                                                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-400 mb-1">
-                                                      <ThumbsDown size={10} /> Weaknesses
-                                                  </div>
-                                                  <ul className="list-disc list-inside text-xs text-gray-400">
-                                                      {analysis.weaknesses.map((w, i) => <li key={i} className="truncate" title={w}>{w}</li>)}
-                                                  </ul>
-                                              </div>
-                                          </div>
-
-                                          <div className="grid grid-cols-2 gap-2 mb-3 border-t border-gray-700 pt-2">
-                                              <div className="bg-green-900/20 p-1.5 rounded">
-                                                  <div className="text-[9px] uppercase text-gray-500 font-bold">Best Map</div>
-                                                  <div className="font-bold text-white">{analysis.bestMap}</div>
-                                                  <div className="text-[10px] text-green-400 font-mono">{analysis.bestMapWinRate}% WR</div>
-                                              </div>
-                                              <div className="bg-red-900/20 p-1.5 rounded">
-                                                  <div className="text-[9px] uppercase text-gray-500 font-bold">Worst Map</div>
-                                                  <div className="font-bold text-white">{analysis.worstMap}</div>
-                                                  <div className="text-[10px] text-red-400 font-mono">{analysis.worstMapWinRate}% WR</div>
-                                              </div>
-                                          </div>
-
-                                          <div className="mt-2 pt-2 border-t border-gray-700 flex justify-between items-center">
-                                              <span className="text-gray-500 text-xs uppercase font-bold">Win Probability</span>
-                                              <span className={`font-mono font-bold ${analysis.winProbability > 50 ? 'text-green-400' : 'text-red-400'}`}>
-                                                  {analysis.winProbability}%
-                                              </span>
-                                          </div>
-
-                                          <div className="mt-2 p-2 bg-green-900/30 border border-green-500/30 rounded flex items-center gap-2 animate-pulse">
-                                             <CheckCircle className="text-green-400" size={14} />
-                                             <span className="text-[10px] text-green-300 font-bold uppercase tracking-wide">Tactical Bonus Active: +2% Win Chance</span>
-                                          </div>
-                                      </div>
-                                  ) : (
-                                      <button 
-                                          onClick={handleAnalyzeOpponent}
-                                          disabled={isAnalyzing || !nextOpponent}
-                                          className="w-full py-2 mb-4 bg-gray-800 hover:bg-gray-700 text-cs-blue font-bold uppercase text-xs tracking-widest rounded transition-colors flex justify-center items-center gap-2"
-                                      >
-                                          {isAnalyzing ? <Loader2 className="animate-spin" size={14} /> : <BrainCircuit size={14} />}
-                                          Analyze Matchup
-                                      </button>
-                                  )}
-
-                                  <button 
-                                      onClick={() => {
-                                          if (myTeam.players.length < 5) {
-                                              setErrorMessage("You need 5 players to enter match lobby!");
-                                              setTimeout(() => setErrorMessage(null), 3000);
-                                          } else {
-                                              setView(GameView.MATCH_LOBBY);
-                                          }
-                                      }}
-                                      disabled={isAnalyzing}
-                                      className={`w-full py-4 font-black uppercase tracking-widest rounded shadow-lg transition-transform transform flex justify-center items-center gap-2
-                                        ${isAnalyzing 
-                                            ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-                                            : 'bg-t-accent hover:bg-red-600 text-white shadow-red-900/20 hover:scale-105'}`}
-                                  >
-                                      Play Match <ArrowRight size={18} />
-                                  </button>
-                                  <div className="text-center mt-2">
-                                     <span className="text-[10px] text-gray-500 uppercase tracking-widest">
-                                         {new Date(nextScheduledMatch.date).toLocaleDateString()}
-                                     </span>
-                                  </div>
-                              </div>
-                          ) : (
-                              <div className="text-center py-10 text-gray-500 italic">
-                                  No matches scheduled.
-                              </div>
-                          )}
-                      </div>
-
-                      <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-                          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between">
-                              League Standing
-                              <TrendingUp size={14} />
-                          </h3>
-                          <div className="flex justify-between items-center mb-2">
-                              <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500 uppercase font-bold">Current Rank</span>
-                                  <span className="text-3xl font-black text-white leading-none">#{getMyLeagueRank()}</span>
-                              </div>
-                              <div className="text-right">
-                                  <span className="block text-[10px] text-gray-500 uppercase font-bold">Points</span>
-                                  <span className="text-cs-yellow font-mono font-bold text-xl">{myTeam.leaguePoints}</span>
-                              </div>
-                          </div>
-                          <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden mt-2">
-                              <div 
-                                className="bg-cs-blue h-full transition-all duration-500" 
-                                style={{ width: `${(myTeam.matchesPlayed / 15) * 100}%` }}
-                              ></div>
-                          </div>
-                          <div className="flex justify-between text-[10px] text-gray-500 mt-1">
-                              <span>Progress</span>
-                              <span>{myTeam.matchesPlayed}/15 Games</span>
-                          </div>
-                          <button 
-                            onClick={() => setView(GameView.LEAGUE)}
-                            className="w-full mt-4 text-xs text-gray-500 hover:text-white uppercase font-bold border-t border-gray-800 pt-2"
-                          >
-                            View Full Table
-                          </button>
-                      </div>
+              )}
+              
+              {errorMessage && (
+                  <div className="absolute top-6 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-2xl z-[60] flex items-center gap-3 animate-bounce">
+                      <AlertTriangle size={20} /> <span className="font-bold text-sm">{errorMessage}</span>
                   </div>
-               </div>
-            )}
-
-            {view === GameView.MATCH_LOBBY && nextOpponent && (
-                <MatchLobby 
-                    myTeam={myTeam} 
-                    opponent={nextOpponent} 
-                    leagueOpponents={leagueOpponents}
-                    onStartMatch={() => enterVeto()}
-                    onSetTactic={handleSetTactic}
-                />
-            )}
-
-            {view === GameView.MAP_VETO && nextOpponent && (
-                <MapVeto 
-                    userTeam={myTeam}
-                    enemyTeam={nextOpponent}
-                    onComplete={(mapId) => startMatchSimulation(mapId)}
-                />
-            )}
-
-            {view === GameView.LEAGUE && (
-                <LeagueView myTeam={myTeam} opponents={leagueOpponents} roundResults={latestRoundResults} />
-            )}
-
-            {view === GameView.PRACTICE && (
-                <PracticeView 
-                    team={myTeam} 
-                    schedule={schedule}
-                    currentDate={currentDate}
-                    onTrain={handleTraining}
-                    onIndividualTrain={handleIndividualTraining}
-                    onUpdateSchedule={handleUpdateSchedule}
-                    onSetupComplete={handleInitialMapSetup}
-                    dailyActivities={dailyActivities}
-                    isDailyTrainingComplete={isDailyTrainingComplete}
-                />
-            )}
-
-            {view === GameView.MARKET && (
-                <MarketView budget={myTeam.budget} onHire={handleHirePlayer} currentRosterCount={myTeam.players.length} />
-            )}
-
-            {view === GameView.SCHEDULE && (
-                <ScheduleView 
-                    tournaments={tournaments} 
-                    currentDate={currentDate} 
-                    team={myTeam} 
-                    schedule={schedule}
-                    onQualify={(tId) => enterVeto(true, tId)}
-                />
-            )}
-
-            {view === GameView.RANKINGS && (
-                <RankingsView />
-            )}
-
-            {view === GameView.MATCH_LIVE && liveMatchData && (
-                <MatchView 
-                    playerTeam={myTeam}
-                    enemyTeam={liveMatchData.enemy}
-                    mapId={liveMatchData.mapId}
-                    context={liveMatchData.context}
-                    onComplete={handleMatchComplete}
-                    fatiguePenalty={liveMatchData.fatiguePenalty} 
-                />
-            )}
+              )}
           </div>
         </>
       )}

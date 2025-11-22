@@ -1,206 +1,232 @@
-
 import React, { useState } from 'react';
-import { Team, Player, PlayerRole, Tactic } from '../types';
-import { Trophy, Shield, Swords, Play, Brain, Zap, Target } from 'lucide-react';
+import { Team, Tactic, OpponentAnalysis, Player } from '../types';
+import { Trophy, Shield, Swords, Play, Brain, Search, Loader2, Crosshair } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface MatchLobbyProps {
   myTeam: Team;
   opponent: Team;
-  leagueOpponents: Team[]; 
+  analysis: OpponentAnalysis | null;
+  isAnalyzing: boolean;
+  onAnalyze: () => void;
   onStartMatch: () => void;
   onSetTactic: (tactic: Tactic) => void;
 }
 
-export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, leagueOpponents, onStartMatch, onSetTactic }) => {
-  const [selectedTactic, setSelectedTactic] = useState<Tactic>(Tactic.DEFAULT);
+const RosterRow: React.FC<{ player: Player; isEnemy?: boolean }> = ({ player, isEnemy }) => {
+    const getDisplayRating = () => {
+        if (isEnemy) {
+            const avgStat = (player.stats.aim + player.stats.reflex + player.stats.strategy + player.stats.utility + player.stats.teamwork + player.stats.clutch) / 6;
+            const estimatedRating = 0.35 + (avgStat / 100);
+            return estimatedRating.toFixed(2);
+        }
 
-  // Calculate Rankings
-  const allTeams = [myTeam, ...leagueOpponents];
-  const sortedTeams = allTeams.sort((a, b) => {
-      if (b.leaguePoints !== a.leaguePoints) return b.leaguePoints - a.leaguePoints;
-      if (b.roundDifference !== a.roundDifference) return b.roundDifference - a.roundDifference;
-      return b.wins - a.wins;
-  });
+        if (!player.matchHistory || player.matchHistory.length === 0) {
+            return "-.--";
+        }
 
-  const getRank = (teamId: string) => sortedTeams.findIndex(t => t.id === teamId) + 1;
-  
-  const myRank = getRank(myTeam.id);
-  const oppRank = getRank(opponent.id);
+        const totalRating = player.matchHistory.reduce((acc, match) => acc + match.rating, 0);
+        return (totalRating / player.matchHistory.length).toFixed(2);
+    };
 
-  const handleTacticChange = (t: Tactic) => {
-      setSelectedTactic(t);
-      onSetTactic(t);
-  };
+    const rating = getDisplayRating();
+    const ratingColor = rating === "-.--" 
+        ? "text-gray-600" 
+        : parseFloat(rating) >= 1.10 
+            ? "text-fm-green" 
+            : parseFloat(rating) < 0.95 
+                ? "text-fm-red" 
+                : "text-fm-muted";
 
-  const getDisplayRating = (p: Player, isPlayerTeam: boolean) => {
-      if (isPlayerTeam && p.matchHistory && p.matchHistory.length > 0) {
-          const total = p.matchHistory.reduce((acc, curr) => acc + curr.rating, 0);
-          return (total / p.matchHistory.length).toFixed(2);
-      }
-      if (isPlayerTeam) return "-";
-
-      const avgStat = (p.stats.aim + p.stats.reflex + p.stats.strategy + p.stats.utility) / 4;
-      let simulatedRating = 1.00 + (avgStat - 50) * 0.01;
-      const noise = (p.alias.length % 5) * 0.01; 
-      if (p.id.charCodeAt(0) % 2 === 0) simulatedRating += noise;
-      else simulatedRating -= noise;
-
-      return Math.max(0.4, simulatedRating).toFixed(2);
-  };
-
-  const TeamColumn = ({ team, rank, isPlayer }: { team: Team, rank: number, isPlayer: boolean }) => (
-    <div className={`flex-1 bg-cs-dark border ${isPlayer ? 'border-cs-blue/30' : 'border-t-red/30'} rounded-xl overflow-hidden shadow-2xl flex flex-col`}>
-        {/* Header */}
-        <div className={`p-6 ${isPlayer ? 'bg-gradient-to-b from-cs-blue/20 to-transparent' : 'bg-gradient-to-b from-t-red/20 to-transparent'} text-center border-b border-gray-800`}>
-            <div className="flex justify-center mb-2">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 ${isPlayer ? 'border-cs-blue bg-cs-blue/10 text-cs-blue' : 'border-t-red bg-t-red/10 text-t-red'}`}>
-                    <Shield size={40} />
+    return (
+        <div className={`flex items-center gap-3 p-2.5 rounded-lg border border-transparent hover:bg-fm-card-hover transition-colors ${isEnemy ? 'flex-row-reverse text-right' : ''}`}>
+            <div className="relative shrink-0">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm border ${isEnemy ? 'bg-fm-red/10 border-fm-red/30 text-fm-red' : 'bg-fm-accent/10 border-fm-accent/30 text-fm-accent'}`}>
+                    {player.alias.charAt(0)}
+                </div>
+                <div className={`absolute -bottom-1 -right-1 text-[8px] font-bold px-1 rounded border ${isEnemy ? 'bg-fm-bg border-fm-red/30 text-fm-red' : 'bg-fm-bg border-fm-accent/30 text-fm-accent'}`}>
+                    {player.role.substring(0, 3).toUpperCase()}
                 </div>
             </div>
-            <h2 className="text-3xl font-black text-white tracking-tight mb-1">{team.name}</h2>
-            <div className="flex justify-center items-center gap-4 text-sm font-bold font-mono">
-                <span className="text-gray-400">Rank #{rank}</span>
-                <span className="text-gray-600">|</span>
-                <span className="text-gray-300">{team.wins}W - {team.losses}L</span>
+            <div className="min-w-0 flex-1">
+                <div className={`font-bold text-white text-sm truncate flex items-center gap-2 ${isEnemy ? 'justify-end' : ''}`}>
+                    {!isEnemy && <CountryFlag countryCode={player.country} />}
+                    {player.alias}
+                    {isEnemy && <CountryFlag countryCode={player.country} />}
+                </div>
+                <div className={`text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 ${isEnemy ? 'justify-end' : ''}`}>
+                    <span className="text-fm-muted opacity-70">RATING 2.0:</span>
+                    <span className={ratingColor}>{rating}</span>
+                </div>
             </div>
         </div>
+    );
+};
 
-        {/* Roster List */}
-        <div className="p-4 bg-gray-900/30">
-            <table className="w-full border-collapse">
-                <thead>
-                    <tr className="text-left text-[10px] uppercase font-bold text-gray-500 border-b border-gray-800">
-                        <th className="pb-3 pl-2">Player</th>
-                        <th className="pb-3">Role</th>
-                        <th className="pb-3 text-right pr-2">{isPlayer ? 'Season Rtg' : 'Est. Rating'}</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800/50">
-                    {team.players.map(p => {
-                         const displayRating = getDisplayRating(p, isPlayer);
-                         const numericRating = parseFloat(displayRating === "-" ? "0" : displayRating);
-                         
-                         let ratingColor = 'text-gray-400';
-                         if (numericRating >= 1.30) ratingColor = 'text-yellow-400';
-                         else if (numericRating >= 1.10) ratingColor = 'text-green-400';
-                         else if (numericRating > 0 && numericRating < 0.95) ratingColor = 'text-red-400';
+export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, analysis, isAnalyzing, onAnalyze, onStartMatch, onSetTactic }) => {
+  const [selectedTactic, setSelectedTactic] = useState<Tactic>(myTeam.preferredTactic || Tactic.DEFAULT);
 
-                        return (
-                            <tr key={p.id} className="hover:bg-gray-800/50 transition-colors h-14">
-                                <td className="pl-2">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 flex justify-center">
-                                             <CountryFlag countryCode={p.country} className="h-4 shadow-sm" />
-                                        </div>
-                                        <span className="font-bold text-gray-200 text-sm md:text-base">{p.alias}</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider ${
-                                        p.role === PlayerRole.AWPER ? 'bg-red-900/20 text-red-400' : 
-                                        p.role === PlayerRole.IGL ? 'bg-yellow-900/20 text-yellow-400' : 
-                                        'bg-gray-800 text-gray-400'
-                                    }`}>
-                                        {p.role}
-                                    </span>
-                                </td>
-                                <td className={`text-right pr-2 font-mono font-bold text-lg ${ratingColor}`}>
-                                    {displayRating}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        </div>
-        
-        <div className="flex-1 bg-gray-900/30"></div>
-    </div>
-  );
+  const handleTacticChange = (tactic: Tactic) => {
+      setSelectedTactic(tactic);
+      onSetTactic(tactic);
+  };
 
   return (
-    <div className="min-h-[calc(100vh-80px)] flex flex-col max-w-7xl mx-auto p-4 md:p-6">
+    <div className="h-full flex flex-col max-w-7xl mx-auto p-6 animate-fade-in">
         {/* Match Header */}
         <div className="text-center mb-8 shrink-0">
-            <div className="flex items-center justify-center gap-2 mb-2 text-cs-yellow font-bold uppercase tracking-widest text-sm">
-                <Trophy size={16} /> {myTeam.league} Matchday
+            <div className="flex items-center justify-center gap-2 mb-2 text-fm-accent font-bold uppercase tracking-widest text-xs bg-fm-accent/10 inline-block px-3 py-1 rounded-full border border-fm-accent/20">
+                <Trophy size={12} /> {myTeam.league} Matchday
             </div>
-            <h1 className="text-4xl md:text-6xl font-black text-white italic tracking-tighter drop-shadow-lg">
+            <h1 className="text-4xl md:text-5xl font-black text-white italic tracking-tighter">
                 MATCH LOBBY
             </h1>
         </div>
 
-        {/* Strategy Selector */}
-        <div className="mb-8 shrink-0 flex justify-center">
-            <div className="bg-cs-dark border border-gray-700 rounded-xl p-6 max-w-3xl w-full shadow-xl">
-                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Brain size={16} /> Match Strategy
-                 </h3>
-                 <div className="grid grid-cols-3 gap-4">
-                    <button 
-                        onClick={() => handleTacticChange(Tactic.AGGRESSIVE)}
-                        className={`p-4 rounded-lg border-2 transition-all relative overflow-hidden ${selectedTactic === Tactic.AGGRESSIVE ? 'border-t-red bg-red-900/20' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'}`}
-                    >
-                        <div className="flex flex-col items-center gap-2">
-                            <Zap size={24} className={selectedTactic === Tactic.AGGRESSIVE ? 'text-t-red' : 'text-gray-500'} />
-                            <span className={`font-black uppercase tracking-wide ${selectedTactic === Tactic.AGGRESSIVE ? 'text-white' : 'text-gray-400'}`}>Aggressive</span>
-                        </div>
-                        {selectedTactic === Tactic.AGGRESSIVE && <div className="absolute top-2 right-2 w-2 h-2 bg-t-red rounded-full animate-pulse"></div>}
-                        <div className="text-[10px] text-gray-500 mt-2 text-center">Rushes. Fast pace. Counters Passive.</div>
-                    </button>
-
-                    <button 
-                        onClick={() => handleTacticChange(Tactic.DEFAULT)}
-                        className={`p-4 rounded-lg border-2 transition-all relative overflow-hidden ${selectedTactic === Tactic.DEFAULT ? 'border-cs-yellow bg-yellow-900/20' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'}`}
-                    >
-                        <div className="flex flex-col items-center gap-2">
-                            <Target size={24} className={selectedTactic === Tactic.DEFAULT ? 'text-cs-yellow' : 'text-gray-500'} />
-                            <span className={`font-black uppercase tracking-wide ${selectedTactic === Tactic.DEFAULT ? 'text-white' : 'text-gray-400'}`}>Default</span>
-                        </div>
-                        {selectedTactic === Tactic.DEFAULT && <div className="absolute top-2 right-2 w-2 h-2 bg-cs-yellow rounded-full animate-pulse"></div>}
-                        <div className="text-[10px] text-gray-500 mt-2 text-center">Balanced. Trap plays. Counters Aggro.</div>
-                    </button>
-
-                    <button 
-                        onClick={() => handleTacticChange(Tactic.PASSIVE)}
-                        className={`p-4 rounded-lg border-2 transition-all relative overflow-hidden ${selectedTactic === Tactic.PASSIVE ? 'border-cs-blue bg-blue-900/20' : 'border-gray-700 bg-gray-800/50 hover:bg-gray-800'}`}
-                    >
-                        <div className="flex flex-col items-center gap-2">
-                            <Shield size={24} className={selectedTactic === Tactic.PASSIVE ? 'text-cs-blue' : 'text-gray-500'} />
-                            <span className={`font-black uppercase tracking-wide ${selectedTactic === Tactic.PASSIVE ? 'text-white' : 'text-gray-400'}`}>Passive</span>
-                        </div>
-                        {selectedTactic === Tactic.PASSIVE && <div className="absolute top-2 right-2 w-2 h-2 bg-cs-blue rounded-full animate-pulse"></div>}
-                        <div className="text-[10px] text-gray-500 mt-2 text-center">Hold angles. Play time. Counters Default.</div>
-                    </button>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+             
+             {/* LEFT: MY TEAM */}
+             <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col">
+                 <div className="p-5 border-b border-fm-border bg-fm-card-hover text-center">
+                    <h2 className="text-xl font-black text-white uppercase tracking-tight">{myTeam.name}</h2>
+                    <div className="text-fm-accent font-bold text-[10px] uppercase tracking-widest mt-1">Rank #{myTeam.rankingPoints}</div>
                  </div>
-            </div>
-        </div>
+                 <div className="p-3 space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+                    {myTeam.players.map(p => <RosterRow key={p.id} player={p} />)}
+                 </div>
+                 <div className="p-4 bg-fm-bg border-t border-fm-border">
+                    <div className="text-[10px] font-bold text-fm-muted uppercase tracking-widest mb-2 text-center">Team Tactics</div>
+                    <div className="flex flex-col gap-2">
+                         {[Tactic.DEFAULT, Tactic.AGGRESSIVE, Tactic.PASSIVE].map(t => (
+                             <button
+                                key={t}
+                                onClick={() => handleTacticChange(t)}
+                                className={`w-full py-2.5 rounded-lg text-[10px] font-bold uppercase border transition-all flex items-center justify-center gap-2 ${selectedTactic === t ? 'bg-fm-accent text-white border-fm-accent shadow-lg' : 'bg-fm-card text-fm-muted border-fm-border hover:bg-fm-card-hover hover:text-white'}`}
+                             >
+                                 {selectedTactic === t && <Brain size={12} />}
+                                 {t}
+                             </button>
+                         ))}
+                    </div>
+                 </div>
+             </div>
 
-        {/* Comparison Grid */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-8 items-stretch min-h-0 mb-8">
-            <TeamColumn team={myTeam} rank={myRank} isPlayer={true} />
-            
-            <div className="flex flex-col items-center justify-center shrink-0 lg:w-24 gap-4">
-                 <div className="w-px h-12 lg:h-32 bg-gradient-to-b from-transparent via-gray-600 to-transparent hidden lg:block"></div>
-                 <div className="text-5xl font-black text-white/20 italic select-none">VS</div>
-                 <div className="w-px h-12 lg:h-32 bg-gradient-to-b from-transparent via-gray-600 to-transparent hidden lg:block"></div>
-            </div>
+             {/* CENTER: ACTIONS & ANALYSIS */}
+             <div className="lg:col-span-6 flex flex-col gap-6">
+                {/* VS CARD */}
+                <div className="bg-gradient-to-br from-fm-card via-[#1a1520] to-black border border-fm-border rounded-xl p-8 flex flex-col items-center justify-center text-center shadow-2xl relative overflow-hidden min-h-[200px]">
+                    <div className="absolute inset-0 bg-[url('https://www.hltv.org/img/static/statsmatchmaps/mirage.png')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
+                    <div className="relative z-10">
+                         <div className="flex items-center justify-center gap-12 mb-4">
+                             <div className="text-6xl font-black text-white drop-shadow-lg">{myTeam.name.substring(0,3).toUpperCase()}</div>
+                             <Swords size={40} className="text-fm-accent animate-pulse" />
+                             <div className="text-6xl font-black text-fm-red drop-shadow-lg">{opponent.name.substring(0,3).toUpperCase()}</div>
+                         </div>
+                         <div className="text-fm-muted font-mono text-xs uppercase tracking-widest">Best of 1 • Map Veto Next</div>
+                    </div>
+                </div>
 
-            <TeamColumn team={opponent} rank={oppRank} isPlayer={false} />
-        </div>
+                {/* ANALYSIS CARD */}
+                <div className="bg-fm-card border border-fm-border rounded-xl p-6 flex-1 flex flex-col shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wide">
+                            <Brain className="text-fm-accent" size={16} /> Tactical Analysis
+                        </h3>
+                        {!analysis && !isAnalyzing && (
+                            <button 
+                                onClick={onAnalyze}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors"
+                            >
+                                <Search size={12} /> Scout Enemy ($1500)
+                            </button>
+                        )}
+                    </div>
 
-        {/* Action Footer */}
-        <div className="shrink-0 flex justify-center pb-6">
-            <button 
-                onClick={onStartMatch}
-                className="group relative px-20 py-5 bg-cs-yellow hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-widest rounded-lg shadow-[0_0_25px_rgba(222,155,53,0.3)] hover:shadow-[0_0_40px_rgba(222,155,53,0.6)] transition-all transform hover:-translate-y-1 flex items-center gap-4 overflow-hidden"
-            >
-                <span className="absolute inset-0 w-full h-full bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500 skew-x-12"></span>
-                <Swords size={28} />
-                START MATCH
-                <Play size={28} className="fill-black" />
-            </button>
+                    <div className="flex-1 bg-fm-bg rounded-xl border border-fm-border p-4 relative overflow-hidden">
+                        {isAnalyzing ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-fm-bg/90 z-10">
+                                <Loader2 size={32} className="text-fm-accent animate-spin" />
+                                <span className="text-fm-accent font-mono text-xs animate-pulse">Processing match data...</span>
+                            </div>
+                        ) : analysis ? (
+                            <div className="space-y-4 animate-fade-in h-full overflow-y-auto custom-scrollbar pr-2">
+                                <div>
+                                    <div className="text-[10px] font-bold text-fm-muted uppercase tracking-widest mb-1">Opponent Strategy</div>
+                                    <div className="text-white font-bold text-base">{analysis.strategy}</div>
+                                    <p className="text-xs text-gray-400 mt-2 leading-relaxed">{analysis.overview}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-fm-green/10 border border-fm-green/20 p-3 rounded-lg">
+                                        <div className="text-[10px] font-bold text-fm-green uppercase mb-1">Strengths</div>
+                                        <ul className="text-[10px] text-gray-300 space-y-1 list-disc pl-4">
+                                            {analysis.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                                        </ul>
+                                    </div>
+                                    <div className="bg-fm-red/10 border border-fm-red/20 p-3 rounded-lg">
+                                        <div className="text-[10px] font-bold text-fm-red uppercase mb-1">Weaknesses</div>
+                                        <ul className="text-[10px] text-gray-300 space-y-1 list-disc pl-4">
+                                            {analysis.weaknesses.map((w, i) => <li key={i}>{w}</li>)}
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 pt-2 border-t border-fm-border">
+                                    <div className="flex-1">
+                                        <div className="text-[10px] text-fm-muted uppercase font-bold">Key Player</div>
+                                        <div className="font-bold text-white text-sm">{analysis.keyPlayer}</div>
+                                    </div>
+                                    <div className="flex-1 text-right">
+                                        <div className="text-[10px] text-fm-muted uppercase font-bold">Win Prob.</div>
+                                        <div className={`font-mono font-bold text-lg ${analysis.winProbability >= 50 ? 'text-fm-green' : 'text-fm-red'}`}>
+                                            {analysis.winProbability}%
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-fm-muted gap-2">
+                                <Shield size={48} className="opacity-10" />
+                                <p className="text-sm font-bold">Analysis Unavailable</p>
+                                <p className="text-xs opacity-60">Scout the enemy to reveal their strategy and key stats.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                <button 
+                    onClick={onStartMatch}
+                    className="w-full py-5 bg-fm-accent hover:bg-fm-accent-hover text-white font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_30px_rgba(217,70,239,0.3)] hover:shadow-[0_0_40px_rgba(217,70,239,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-4"
+                >
+                    <Play size={24} className="fill-current" />
+                    Start Veto Phase
+                </button>
+             </div>
+
+             {/* RIGHT: ENEMY TEAM */}
+             <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col">
+                 <div className="p-5 border-b border-fm-border bg-fm-card-hover text-center">
+                    <h2 className="text-xl font-black text-fm-red uppercase tracking-tight">{opponent.name}</h2>
+                    <div className="text-fm-red/70 font-bold text-[10px] uppercase tracking-widest mt-1">Rank #{opponent.rankingPoints}</div>
+                 </div>
+                 <div className="p-3 space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+                    {opponent.players.map(p => <RosterRow key={p.id} player={p} isEnemy={true} />)}
+                 </div>
+                 <div className="p-4 bg-fm-bg border-t border-fm-border text-center">
+                    <div className="text-[10px] font-bold text-fm-muted uppercase tracking-widest mb-2">Enemy Focus</div>
+                    <div className="text-sm font-bold text-gray-300 flex items-center justify-center gap-2">
+                        {analysis ? (
+                            <>
+                                <Crosshair size={14} className="text-fm-red" />
+                                {analysis.strategy}
+                            </>
+                        ) : (
+                            <>
+                                <Shield size={14} /> Hidden
+                            </>
+                        )}
+                    </div>
+                 </div>
+             </div>
+
         </div>
     </div>
   );

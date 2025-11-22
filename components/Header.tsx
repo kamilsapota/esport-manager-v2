@@ -1,94 +1,89 @@
-
-
 import React from 'react';
 import { Team, GameView } from '../types';
-import { DollarSign, Users, Calendar, ChevronRight, AlertCircle } from 'lucide-react';
+import { Calendar, ChevronRight, DollarSign, Menu, Bell } from 'lucide-react';
 
 interface HeaderProps {
   team: Team;
   currentView: GameView;
-  setView: (view: GameView) => void;
   currentDate: Date;
   onAdvanceDay: () => void;
   isMatchDay: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ team, currentView, setView, currentDate, onAdvanceDay, isMatchDay }) => {
-  const formattedDate = currentDate.toLocaleDateString('en-US', { 
+export const Header: React.FC<HeaderProps> = ({ team, currentView, currentDate, onAdvanceDay, isMatchDay }) => {
+  const formattedDate = currentDate.toLocaleDateString('en-GB', { 
     weekday: 'short', 
-    year: 'numeric', 
+    day: 'numeric', 
     month: 'short', 
-    day: 'numeric' 
+    year: 'numeric' 
   });
 
+  const getPageTitle = (view: GameView) => {
+      switch(view) {
+          case GameView.DASHBOARD: return 'Manager Home';
+          case GameView.LEAGUE: return 'Competitions Center';
+          case GameView.MATCH_LOBBY: return 'Match Day Hub';
+          case GameView.PRACTICE: return 'Training Ground';
+          case GameView.SCHEDULE: return 'Fixture List';
+          case GameView.MARKET: return 'Transfer Market';
+          case GameView.RANKINGS: return 'World Scouting';
+          default: return view;
+      }
+  };
+
   return (
-    <header className="h-16 bg-cs-dark border-b border-gray-800 flex items-center justify-between px-6 sticky top-0 z-50 shadow-md">
-      <div className="flex items-center gap-6">
-        <h1 className="text-2xl font-black tracking-tighter italic text-white hidden md:block">
-          <span className="text-cs-yellow">CS</span>:MANAGER
-        </h1>
-        <nav className="flex gap-1 bg-gray-900 p-1 rounded-lg overflow-x-auto">
-          {[
-            { id: GameView.DASHBOARD, label: 'DASHBOARD' },
-            { id: GameView.LEAGUE, label: 'LEAGUE' },
-            { id: GameView.PRACTICE, label: 'PRACTICE' },
-            { id: GameView.SCHEDULE, label: 'SCHEDULE' },
-            { id: GameView.RANKINGS, label: 'RANKINGS' },
-            { id: GameView.MARKET, label: 'MARKET' },
-            { id: GameView.MATCH_LOBBY, label: 'PLAY' }
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setView(item.id)}
-              className={`px-3 md:px-4 py-1.5 rounded text-xs md:text-sm font-bold transition-colors whitespace-nowrap ${
-                currentView === item.id 
-                  ? 'bg-gray-700 text-white shadow-sm' 
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+    <header className="h-16 bg-fm-bg border-b border-fm-border flex items-center justify-between px-6 shrink-0 z-20">
+      {/* LEFT: Context / Breadcrumbs */}
+      <div className="flex items-center gap-4">
+        <div className="flex flex-col">
+            <span className="text-[10px] uppercase font-bold text-fm-muted tracking-wider">Current View</span>
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                {getPageTitle(currentView)}
+            </h1>
+        </div>
+        <div className="h-8 w-px bg-fm-border mx-2"></div>
+         <div className="flex items-center gap-3 bg-fm-card px-3 py-1.5 rounded-full border border-fm-border">
+            <div className="w-2 h-2 rounded-full bg-fm-green animate-pulse"></div>
+            <span className="text-xs font-bold text-white">{team.name}</span>
+         </div>
       </div>
 
-      <div className="flex items-center gap-4 md:gap-6">
-        <div className="flex items-center gap-4">
-            <div className={`flex items-center gap-2 px-3 py-1 rounded border hidden sm:flex transition-colors ${
-                isMatchDay 
-                ? 'bg-cs-yellow/20 border-cs-yellow text-cs-yellow animate-pulse' 
-                : 'bg-gray-800 border-gray-700 text-gray-300'
-            }`}>
-                {isMatchDay ? <AlertCircle size={14} /> : <Calendar size={14} className="text-cs-yellow" />}
-                <span className="text-sm font-mono font-bold">{isMatchDay ? 'MATCH DAY' : formattedDate}</span>
-            </div>
-            
-            <button 
-                onClick={onAdvanceDay}
-                disabled={isMatchDay}
-                className={`p-1.5 rounded transition-colors flex items-center gap-1 ${
-                    isMatchDay 
-                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-50' 
-                    : 'bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white'
-                }`}
-                title={isMatchDay ? "Play Match First" : "Simulate Next Day"}
-            >
-                <ChevronRight size={16} />
-                {isMatchDay && <span className="text-[10px] font-bold uppercase mr-1">Locked</span>}
-            </button>
-        </div>
-
-        <div className="h-6 w-px bg-gray-700 hidden md:block"></div>
-
-        <div className="flex items-center gap-2 text-green-400 bg-green-900/20 px-3 py-1 rounded-full border border-green-900/50">
-          <DollarSign size={14} />
-          <span className="font-mono font-bold text-sm">{team.budget.toLocaleString()}</span>
-        </div>
+      {/* RIGHT: Status & Actions */}
+      <div className="flex items-center gap-6">
         
-        <div className="hidden md:flex items-center gap-2 text-gray-400">
-          <Users size={14} />
-          <span className="font-mono text-sm">{team.players.length}/5</span>
+        {/* Budget */}
+        <div className="hidden md:flex flex-col items-end">
+            <span className="text-[10px] uppercase font-bold text-fm-muted">Budget</span>
+            <div className="flex items-center gap-1 text-fm-green font-mono font-bold">
+                <DollarSign size={14} />
+                {team.budget.toLocaleString()}
+            </div>
         </div>
+
+        {/* Date */}
+        <div className="flex items-center gap-3 bg-fm-card px-4 py-2 rounded-lg border border-fm-border">
+            <Calendar size={16} className="text-fm-accent" />
+            <span className="text-sm font-bold text-white font-mono uppercase">{formattedDate}</span>
+        </div>
+
+        {/* Continue Button */}
+        <button
+          onClick={onAdvanceDay}
+          disabled={isMatchDay}
+          className={`
+            group relative overflow-hidden rounded-md px-8 py-2.5 transition-all duration-300
+            ${isMatchDay 
+                ? 'bg-fm-card border border-fm-border cursor-not-allowed opacity-50' 
+                : 'bg-fm-accent hover:bg-fm-accent-hover shadow-[0_0_20px_rgba(217,70,239,0.3)] hover:shadow-[0_0_30px_rgba(217,70,239,0.5)]'}
+          `}
+        >
+            <div className="relative z-10 flex items-center gap-2">
+                <span className={`text-sm font-black uppercase tracking-wider ${isMatchDay ? 'text-fm-muted' : 'text-white'}`}>
+                    {isMatchDay ? 'Match Pending' : 'Continue'}
+                </span>
+                <ChevronRight size={16} className={isMatchDay ? 'text-fm-muted' : 'text-white'} />
+            </div>
+        </button>
       </div>
     </header>
   );
