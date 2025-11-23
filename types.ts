@@ -1,4 +1,5 @@
 
+
 export enum PlayerRole {
   IGL = 'IGL',
   AWPER = 'AWPer',
@@ -60,6 +61,7 @@ export interface Player {
   salary: number;
   morale: number; 
   avatarSeed?: string;
+  imageUrl?: string;
   matchHistory: PlayerPerformance[];
 }
 

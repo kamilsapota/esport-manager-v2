@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { Team, MapPracticeStats, Player, PlayerStats, TrainingIntensity, ScheduledMatch } from '../types';
 import { Target, Swords, Zap, Brain, CheckCircle, Lock, Activity, Users, AlertTriangle, Flame, Crosshair, Shield, Dumbbell, ChevronRight, Battery, Calendar, BatteryCharging, Smile } from 'lucide-react';
@@ -432,8 +434,12 @@ export const PracticeView: React.FC<PracticeViewProps> = ({ team, schedule, curr
                             <>
                                 <div className="flex items-center justify-between mb-6">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-fm-bg rounded-lg flex items-center justify-center font-bold text-xl text-fm-muted border border-fm-border">
-                                            {selectedPlayer.alias.charAt(0)}
+                                        <div className="w-12 h-12 bg-fm-bg rounded-lg flex items-center justify-center font-bold text-xl text-fm-muted border border-fm-border overflow-hidden relative">
+                                            {selectedPlayer.imageUrl ? (
+                                                <img src={selectedPlayer.imageUrl} alt={selectedPlayer.alias} className="w-full h-full object-cover" />
+                                            ) : (
+                                                selectedPlayer.alias.charAt(0)
+                                            )}
                                         </div>
                                         <div>
                                             <h3 className="text-2xl font-black text-white">{selectedPlayer.alias}</h3>

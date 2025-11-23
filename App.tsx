@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { Team, Player, GameView, MatchResult, PlayerRole, Tournament, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats, Tactic, TrainingIntensity } from './types';
 import { Header } from './components/Header';
@@ -66,6 +68,14 @@ const COUNTRIES = [
     { code: 'AU', name: 'Australia' },
     { code: 'CN', name: 'China' },
     { code: 'ES', name: 'Spain' },
+];
+
+const PLAYER_PORTRAITS = [
+    'https://th.bing.com/th/id/OIG1.V4uq5T0A.E8wbxad5FpT?pid=ImgGn',
+    'https://th.bing.com/th/id/OIG2.7Oo33qK_YnHG5aCukFHn?pid=ImgGn',
+    'https://th.bing.com/th/id/OIG4.o2i3OcH38UWXGAOoKEke?pid=ImgGn',
+    'https://th.bing.com/th/id/OIG4.8oX0pm95oLL1a2dKrf2V?pid=ImgGn',
+    'https://th.bing.com/th/id/OIG1.736Ck96kJgGBQlafROy6?pid=ImgGn'
 ];
 
 export default function App() {
@@ -168,6 +178,12 @@ export default function App() {
     
     // Generate and Adjust Roster Age Logic
     let initialRoster = generateRoster(country, avgLeagueRating + 5, 0.5);
+
+    // Assign Portraits
+    initialRoster = initialRoster.map((p, i) => ({
+        ...p,
+        imageUrl: PLAYER_PORTRAITS[i]
+    }));
     
     // 1. Find IGL and set age 21-23
     const iglIndex = initialRoster.findIndex(p => p.role === PlayerRole.IGL);
@@ -189,6 +205,7 @@ export default function App() {
     const countryName = COUNTRIES.find(c => c.code === country)?.name || country;
     const startStr = "01/01/2024";
 
+    // Reordered messages: Scouting Network is last
     setMessages([
         {
             id: 1,
@@ -480,12 +497,10 @@ export default function App() {
         setTimeout(() => setErrorMessage(null), 3000);
         return;
       }
-      if (!isQualifier && !isMatchDay) {
-         setErrorMessage("No match scheduled for today. Advance to the next match date.");
-         setTimeout(() => setErrorMessage(null), 3000);
-         return; 
-      }
-      if (!isDailyTrainingComplete) {
+      
+      // Modified to allow entering lobby even if not match day, blocking action inside component instead
+      
+      if (!isDailyTrainingComplete && isMatchDay) {
           processPassiveTraining();
       }
       setPendingMatchContext({ isQualifier, tournamentId });
@@ -679,6 +694,8 @@ export default function App() {
                           onAnalyze={handleAnalyzeOpponent}
                           onStartMatch={handleStartVeto}
                           onSetTactic={handleSetTactic}
+                          isMatchDay={isMatchDay}
+                          matchDate={nextScheduledMatch?.date}
                       />
                   )}
 

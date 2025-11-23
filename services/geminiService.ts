@@ -141,11 +141,6 @@ export const simulateRound = (
     spendMoney(state, buyUs, buyEnemy);
 
     // 2. Calculate Tactical Modifier
-    // COUNTER LOGIC: 5% Bonus for countering
-    // Passive (Holding) counters Aggressive (Rushing) -> CTs holding angles vs rush
-    // Aggressive (Map Control) counters Default (Slow play) -> Catching them off guard
-    // Default (Structure) counters Passive (Turtling) -> Execute breaks turtle
-    
     let tacticalMod = 0;
 
     if (usTactic === Tactic.PASSIVE && enemyTactic === Tactic.AGGRESSIVE) tacticalMod = 0.05;
@@ -224,7 +219,9 @@ export const simulateRound = (
     let aliveWinner = [...winnerTeam.players];
     let aliveLoser = [...loserTeam.players];
 
-    const winnerDeaths = Math.floor(Math.random() * 3); 
+    // Reduced winner deaths to ensure they survive to finish off the enemy team. Max 1 death most of the time.
+    const winnerDeaths = Math.random() > 0.8 ? 1 : 0;
+    // Force minimum 4 kills for the winning team (so loser dies at least 4 times). High chance of Ace.
     let loserDeaths = Math.random() > 0.3 ? 5 : 4;
 
     let eventQueue: ('W' | 'L')[] = []; 
@@ -272,6 +269,41 @@ export const simulateRound = (
             weapon: weapon,
             isHeadshot: determineHeadshot(weapon),
             killerSide: killerSideStr
+        });
+    }
+
+    // FAILSAFE: Ensure winning team gets at least 4 kills
+    // Count unique victims from loser team
+    const deadLoserAliases = new Set(events.filter(e => {
+        return loserTeam.players.some(p => p.alias === e.victim);
+    }).map(e => e.victim));
+
+    // While we haven't killed 4 losers, and there are still losers alive, force more kills
+    while (deadLoserAliases.size < 4 && aliveLoser.length > 0) {
+        const victimIdx = Math.floor(Math.random() * aliveLoser.length);
+        const victim = aliveLoser.splice(victimIdx, 1)[0]; 
+        deadLoserAliases.add(victim.alias);
+
+        // Pick a killer from alive winners (or just any winner if somehow all dead, but logic prevents that mostly)
+        const killer = aliveWinner.length > 0 
+            ? aliveWinner[Math.floor(Math.random() * aliveWinner.length)]
+            : winnerTeam.players[Math.floor(Math.random() * winnerTeam.players.length)];
+
+        const weapon = getWeapon(winnerBuy, killer.role, winnerSide);
+        const reward = getKillReward(weapon);
+
+        if (usTeam.players.some(p => p.id === killer.id)) {
+            state.moneyUs += reward;
+        } else {
+            state.moneyEnemy += reward;
+        }
+
+        events.push({
+            killer: killer.alias,
+            victim: victim.alias,
+            weapon: weapon,
+            isHeadshot: determineHeadshot(weapon),
+            killerSide: winnerSide
         });
     }
 

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { MatchResult, MatchLog, Team, PlayerMatchStats, KillEvent, Tactic } from '../types';
 import { Trophy, XCircle, FastForward, Pause, User, Brain, CheckCircle2, UserX } from 'lucide-react';
@@ -157,7 +158,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         if (!isAnimatingRef.current) {
             runRound(winThreshold);
         }
-    }, 3000); 
+    }, 600); // Standard delay between rounds
 
     return () => {
         if (timerRef.current) clearTimeout(timerRef.current);
@@ -255,12 +256,13 @@ export const MatchView: React.FC<MatchViewProps> = ({ playerTeam, enemyTeam, map
         } else {
             if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
             setSimState(nextState);
+            // Increased delay to 2000ms to ensure the user can see the final kill before the round resets
             setTimeout(() => {
                 isAnimatingRef.current = false;
                 setRoundNum(prev => prev + 1);
-            }, 1500);
+            }, 2000);
         }
-    }, 600);
+    }, 100); // Speed at 100ms - fast enough but readable
   };
 
   const finishMatch = (finalState?: RoundState) => {

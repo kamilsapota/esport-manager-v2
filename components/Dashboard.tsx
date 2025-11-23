@@ -1,3 +1,6 @@
+
+
+
 import React, { useState } from 'react';
 import { Team, ScheduledMatch, Player } from '../types';
 import { PlayerCard } from './PlayerCard';
@@ -240,8 +243,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 onClick={() => setSelectedPlayer(p)}
                                 className="bg-fm-bg p-3 rounded border border-fm-border flex items-center gap-3 hover:border-fm-accent cursor-pointer transition-all hover:bg-gray-800 group"
                             >
-                                 <div className={`w-10 h-10 rounded flex items-center justify-center font-bold text-sm shrink-0 ${p.morale < 50 ? 'bg-red-900/20 text-red-500' : 'bg-fm-card text-gray-300 border border-fm-border'}`}>
-                                     {p.alias.charAt(0)}
+                                 <div className={`w-10 h-10 rounded flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden relative ${p.morale < 50 ? 'bg-red-900/20 text-red-500' : 'bg-fm-card text-gray-300 border border-fm-border'}`}>
+                                     {p.imageUrl ? (
+                                         <img src={p.imageUrl} alt={p.alias} className="w-full h-full object-cover" />
+                                     ) : (
+                                         p.alias.charAt(0)
+                                     )}
                                  </div>
                                  <div className="flex-1 min-w-0">
                                      <div className="flex items-center gap-2">
@@ -290,7 +297,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                          <div className="text-2xl font-black text-white">{leagueRank}<span className="text-xs align-top opacity-50">th</span></div>
                      </div>
                      <div className="bg-fm-bg rounded border border-fm-border p-2 text-center">
-                         <div className="text-[10px] uppercase font-bold text-fm-muted">Played</div>
+                         <div className="text-[10px] uppercase font-bold text-fm-muted">Season Progress</div>
                          <div className="text-2xl font-black text-white">{team.matchesPlayed}<span className="text-gray-500 text-lg">/15</span></div>
                      </div>
                  </div>
@@ -371,8 +378,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                     {team.players.map(p => (
                                         <div key={p.id} className="p-4 flex items-center justify-between hover:bg-white/5">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 bg-fm-bg rounded flex items-center justify-center font-bold text-xs text-gray-500 border border-fm-border">
-                                                    {p.alias.charAt(0)}
+                                                <div className="w-8 h-8 bg-fm-bg rounded flex items-center justify-center font-bold text-xs text-gray-500 border border-fm-border overflow-hidden relative">
+                                                    {p.imageUrl ? (
+                                                        <img src={p.imageUrl} alt={p.alias} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        p.alias.charAt(0)
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-bold text-white">{getFormattedName(p)}</div>

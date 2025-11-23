@@ -1,6 +1,8 @@
+
+
 import React, { useState } from 'react';
 import { Team, Tactic, OpponentAnalysis, Player } from '../types';
-import { Trophy, Shield, Swords, Play, Brain, Search, Loader2, Crosshair } from 'lucide-react';
+import { Trophy, Shield, Swords, Play, Brain, Search, Loader2, Crosshair, Lock, Calendar } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface MatchLobbyProps {
@@ -11,6 +13,8 @@ interface MatchLobbyProps {
   onAnalyze: () => void;
   onStartMatch: () => void;
   onSetTactic: (tactic: Tactic) => void;
+  isMatchDay: boolean;
+  matchDate?: string;
 }
 
 const RosterRow: React.FC<{ player: Player; isEnemy?: boolean }> = ({ player, isEnemy }) => {
@@ -41,8 +45,12 @@ const RosterRow: React.FC<{ player: Player; isEnemy?: boolean }> = ({ player, is
     return (
         <div className={`flex items-center gap-3 p-2.5 rounded-lg border border-transparent hover:bg-fm-card-hover transition-colors ${isEnemy ? 'flex-row-reverse text-right' : ''}`}>
             <div className="relative shrink-0">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm border ${isEnemy ? 'bg-fm-red/10 border-fm-red/30 text-fm-red' : 'bg-fm-accent/10 border-fm-accent/30 text-fm-accent'}`}>
-                    {player.alias.charAt(0)}
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm border overflow-hidden ${isEnemy ? 'bg-fm-red/10 border-fm-red/30 text-fm-red' : 'bg-fm-accent/10 border-fm-accent/30 text-fm-accent'}`}>
+                    {player.imageUrl ? (
+                        <img src={player.imageUrl} alt={player.alias} className="w-full h-full object-cover" />
+                    ) : (
+                        player.alias.charAt(0)
+                    )}
                 </div>
                 <div className={`absolute -bottom-1 -right-1 text-[8px] font-bold px-1 rounded border ${isEnemy ? 'bg-fm-bg border-fm-red/30 text-fm-red' : 'bg-fm-bg border-fm-accent/30 text-fm-accent'}`}>
                     {player.role.substring(0, 3).toUpperCase()}
@@ -63,13 +71,27 @@ const RosterRow: React.FC<{ player: Player; isEnemy?: boolean }> = ({ player, is
     );
 };
 
-export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, analysis, isAnalyzing, onAnalyze, onStartMatch, onSetTactic }) => {
+export const MatchLobby: React.FC<MatchLobbyProps> = ({ 
+    myTeam, 
+    opponent, 
+    analysis, 
+    isAnalyzing, 
+    onAnalyze, 
+    onStartMatch, 
+    onSetTactic,
+    isMatchDay,
+    matchDate
+}) => {
   const [selectedTactic, setSelectedTactic] = useState<Tactic>(myTeam.preferredTactic || Tactic.DEFAULT);
 
   const handleTacticChange = (tactic: Tactic) => {
       setSelectedTactic(tactic);
       onSetTactic(tactic);
   };
+
+  const formattedDate = matchDate ? new Date(matchDate).toLocaleDateString('en-GB', { 
+    weekday: 'long', day: 'numeric', month: 'long'
+  }) : "Upcoming";
 
   return (
     <div className="h-full flex flex-col max-w-7xl mx-auto p-6 animate-fade-in">
@@ -192,13 +214,25 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({ myTeam, opponent, analys
                     </div>
                 </div>
                 
-                <button 
-                    onClick={onStartMatch}
-                    className="w-full py-5 bg-fm-accent hover:bg-fm-accent-hover text-white font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_30px_rgba(217,70,239,0.3)] hover:shadow-[0_0_40px_rgba(217,70,239,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-4"
-                >
-                    <Play size={24} className="fill-current" />
-                    Start Veto Phase
-                </button>
+                {isMatchDay ? (
+                    <button 
+                        onClick={onStartMatch}
+                        className="w-full py-5 bg-fm-accent hover:bg-fm-accent-hover text-white font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_30px_rgba(217,70,239,0.3)] hover:shadow-[0_0_40px_rgba(217,70,239,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-4"
+                    >
+                        <Play size={24} className="fill-current" />
+                        Start Veto Phase
+                    </button>
+                ) : (
+                    <div className="w-full py-5 bg-fm-card border border-fm-border text-fm-muted font-bold uppercase tracking-widest rounded-xl flex flex-col items-center justify-center gap-2 cursor-not-allowed relative overflow-hidden group">
+                         <div className="absolute inset-0 bg-stripes opacity-5"></div>
+                         <div className="flex items-center gap-2 text-sm">
+                            <Lock size={16} /> Locked
+                         </div>
+                         <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <Calendar size={12} /> Match Date: {formattedDate}
+                         </div>
+                    </div>
+                )}
              </div>
 
              {/* RIGHT: ENEMY TEAM */}
