@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Team, Player, PlayerRole, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats, Tactic, TrainingIntensity, DRILLS, DrillType, Coach, AutomationConfig, Tournament, GameView, MatchResult, SeasonPhase, PlayoffMatch, PlayerMatchStats, SeriesState } from './types';
 import { Header } from './components/Header';
@@ -758,8 +757,10 @@ export default function App() {
       let subject = "Season Reset";
       let body = "<p>The new season has begun. The board expects a playoff run this time.</p>";
 
+      const newLeagueName = newOpponents.length > 0 ? newOpponents[0].league : 'Next League';
+
       if (promoted) {
-          subject = `Promotion to ${newOpponents[0]?.league || 'Next League'}!`;
+          subject = `Promotion to ${newLeagueName}!`;
           body = `<p>Congratulations on your playoff victory! You have been promoted.</p><p>Welcome to the new season. Competition will be tougher here.</p>`;
       } else if (seasonEndStats.isPlayoff) {
            subject = "Post-Season Review: Good Effort";
@@ -815,7 +816,6 @@ export default function App() {
           // SERIES FINISHED (Someone reached 2 wins)
           setSeriesState({ active: false, maps: [], currentMapIndex: 0, scoreUs: 0, scoreEnemy: 0 });
           
-          // Result of the whole series based on who reached 2 wins
           const seriesWin = newScoreUs === 2;
           
           // Proceed with Post-Match Logic using SERIES result
@@ -833,13 +833,11 @@ export default function App() {
 
                   if (!seriesWin) {
                       // User Eliminated
-                      // Determine rank based on round
-                      // Use the schedule to find which round we just lost
-                      const lostMatch = schedule.find(s => !s.isPlayed);
+                      const bracketMatch = playoffBracket.find(m => m.id === matchId);
                       let displayRank = 8;
-                      if (lostMatch?.playoffRound === 'QF') displayRank = 5;
-                      else if (lostMatch?.playoffRound === 'SF') displayRank = 3;
-                      else if (lostMatch?.playoffRound === 'F') displayRank = 2;
+                      if (bracketMatch?.round === 'QF') displayRank = 5;
+                      else if (bracketMatch?.round === 'SF') displayRank = 3;
+                      else if (bracketMatch?.round === 'F') displayRank = 2;
 
                       setSeasonEndStats({ rank: displayRank, isPlayoff: true, isPromotion: false });
                       setShowSeasonEndOverlay(true);

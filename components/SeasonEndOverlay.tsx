@@ -68,7 +68,7 @@ export const SeasonEndOverlay: React.FC<SeasonEndOverlayProps> = ({ rank, isPlay
             <div className="relative z-10 text-center max-w-2xl px-6">
                 {/* HEADLINE */}
                 <h1 className={`text-4xl md:text-6xl font-black italic uppercase tracking-tighter text-white mb-2 transition-all duration-1000 transform ${step >= 1 ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
-                    {seasonPhase === 'PLAYOFFS' ? 'Playoff Run Ended' : 'Season Complete'}
+                    {seasonPhase === 'PLAYOFFS' ? (isChampion ? 'Champions!' : 'Playoff Run Ended') : 'Season Complete'}
                 </h1>
                 <div className={`text-fm-muted font-mono uppercase tracking-widest text-sm mb-12 transition-all duration-1000 delay-200 ${step >= 1 ? 'opacity-100' : 'opacity-0'}`}>
                     {leagueName} {seasonPhase === 'PLAYOFFS' ? 'Playoffs' : 'Regular Season'}
