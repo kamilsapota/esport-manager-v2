@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Player, MatchResult, Team, PlayerRole, OpponentAnalysis, PlayerMatchStats, MatchLog, KillEvent, Tactic } from '../types';
 
@@ -121,7 +122,8 @@ export const simulateRound = (
     moraleBoostUs: number = 0,
     fatiguePenaltyUs: number = 0,
     usTactic: Tactic = Tactic.DEFAULT,
-    enemyTactic: Tactic = Tactic.DEFAULT
+    enemyTactic: Tactic = Tactic.DEFAULT,
+    analysisActive: boolean = false // Added bonus parameter
 ): KillEvent[] => {
     const isPistol = roundNum === 1 || roundNum === 13 || (roundNum > 24 && (roundNum - 25) % 3 === 0);
     const isMatchPointUs = state.scoreUs === 12;
@@ -193,6 +195,11 @@ export const simulateRound = (
     // APPLY TACTICAL MODIFIER
     winChanceUs += tacticalMod;
     winChanceUs += moraleBoostUs;
+    
+    // APPLY ANALYSIS BONUS (+2%)
+    if (analysisActive) {
+        winChanceUs += 0.02;
+    }
 
     winChanceUs = Math.max(0.10, Math.min(0.90, winChanceUs));
     const usWins = Math.random() < winChanceUs;
@@ -219,9 +226,7 @@ export const simulateRound = (
     let aliveWinner = [...winnerTeam.players];
     let aliveLoser = [...loserTeam.players];
 
-    // Reduced winner deaths to ensure they survive to finish off the enemy team. Max 1 death most of the time.
     const winnerDeaths = Math.random() > 0.8 ? 1 : 0;
-    // Force minimum 4 kills for the winning team (so loser dies at least 4 times). High chance of Ace.
     let loserDeaths = Math.random() > 0.3 ? 5 : 4;
 
     let eventQueue: ('W' | 'L')[] = []; 
@@ -273,18 +278,15 @@ export const simulateRound = (
     }
 
     // FAILSAFE: Ensure winning team gets at least 4 kills
-    // Count unique victims from loser team
     const deadLoserAliases = new Set(events.filter(e => {
         return loserTeam.players.some(p => p.alias === e.victim);
     }).map(e => e.victim));
 
-    // While we haven't killed 4 losers, and there are still losers alive, force more kills
     while (deadLoserAliases.size < 4 && aliveLoser.length > 0) {
         const victimIdx = Math.floor(Math.random() * aliveLoser.length);
         const victim = aliveLoser.splice(victimIdx, 1)[0]; 
         deadLoserAliases.add(victim.alias);
 
-        // Pick a killer from alive winners (or just any winner if somehow all dead, but logic prevents that mostly)
         const killer = aliveWinner.length > 0 
             ? aliveWinner[Math.floor(Math.random() * aliveWinner.length)]
             : winnerTeam.players[Math.floor(Math.random() * winnerTeam.players.length)];
@@ -439,6 +441,10 @@ export const generateFreeAgents = async (count: number, budget: number): Promise
 export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<OpponentAnalysis> => {
     const ai = getAiClient();
     
+    // Prepare data strings to prevent hallucinations
+    const rosterStr = opponent.players.map(p => `${p.alias} (${p.role})`).join(', ');
+    const mapStr = Object.entries(opponent.mapStats).map(([map, score]) => `${map}: ${score}`).join(', ');
+
     const analysisSchema: Schema = {
       type: Type.OBJECT,
       properties: {
@@ -453,11 +459,30 @@ export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<Oppo
         bestMapWinRate: { type: Type.INTEGER },
         worstMap: { type: Type.STRING },
         worstMapWinRate: { type: Type.INTEGER },
+        suggestedTactic: { type: Type.STRING, enum: [Tactic.AGGRESSIVE, Tactic.PASSIVE, Tactic.DEFAULT] }
       },
-      required: ['overview', 'keyPlayer', 'keyPlayerReason', 'strengths', 'weaknesses', 'strategy', 'winProbability', 'bestMap', 'bestMapWinRate', 'worstMap', 'worstMapWinRate']
+      required: ['overview', 'keyPlayer', 'keyPlayerReason', 'strengths', 'weaknesses', 'strategy', 'winProbability', 'bestMap', 'bestMapWinRate', 'worstMap', 'worstMapWinRate', 'suggestedTactic']
     };
   
-    const prompt = `Analyze CS2 match: ${myTeam.name} vs ${opponent.name}. Return JSON.`;
+    const prompt = `
+      You are a CS2 Analyst. Analyze this opponent based ONLY on the provided data.
+      Opponent: ${opponent.name}
+      Roster: ${rosterStr}
+      Map Proficiency: ${mapStr}
+      My Team: ${myTeam.name}
+      
+      Output JSON with:
+      - overview (concise, max 2 sentences)
+      - keyPlayer (MUST be one of the names listed above in the roster)
+      - keyPlayerReason (short reason)
+      - strengths (3 bullet points, e.g. "Strong AWP", "Good Nuke")
+      - weaknesses (3 bullet points)
+      - strategy (likely playstyle: Aggressive, Passive, or Default)
+      - winProbability (0-100)
+      - bestMap (name of their best map from proficiency)
+      - worstMap (name of their worst map from proficiency)
+      - suggestedTactic (how we should play: "Aggressive", "Passive", or "Default")
+    `;
   
     try {
       const response = await ai.models.generateContent({
@@ -471,6 +496,10 @@ export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<Oppo
   
       return JSON.parse(response.text || "{}") as OpponentAnalysis;
     } catch (error) {
+       // Fallback with real data to prevent blank screen
+       const bestMapEntry = Object.entries(opponent.mapStats).reduce((a, b) => a[1] > b[1] ? a : b);
+       const worstMapEntry = Object.entries(opponent.mapStats).reduce((a, b) => a[1] < b[1] ? a : b);
+
        return {
          overview: "Gemini unavailable. Analysis based on raw stats.",
          keyPlayer: opponent.players[0].alias,
@@ -479,10 +508,11 @@ export const analyzeMatchup = async (myTeam: Team, opponent: Team): Promise<Oppo
          weaknesses: ["Economy"],
          strategy: "Play Default",
          winProbability: 50,
-         bestMap: "Mirage",
-         bestMapWinRate: 60,
-         worstMap: "Nuke",
-         worstMapWinRate: 40
+         bestMap: bestMapEntry[0],
+         bestMapWinRate: bestMapEntry[1],
+         worstMap: worstMapEntry[0],
+         worstMapWinRate: worstMapEntry[1],
+         suggestedTactic: Tactic.DEFAULT
        };
     }
 };

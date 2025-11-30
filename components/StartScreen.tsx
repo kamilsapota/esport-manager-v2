@@ -1,161 +1,169 @@
 import React, { useState } from 'react';
-import { Trophy, Lock, UserPlus, Globe, ChevronRight, Shield, Play } from 'lucide-react';
+import { Crosshair, Trophy, PlusCircle, Globe, ChevronLeft } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface StartScreenProps {
-    onStartGame: (teamName: string, country: string) => void;
+  onStartGame: (teamName: string, country: string) => void;
 }
 
+const COUNTRIES = [
+    { code: 'US', name: 'United States' },
+    { code: 'DK', name: 'Denmark' },
+    { code: 'FR', name: 'France' },
+    { code: 'SE', name: 'Sweden' },
+    { code: 'BR', name: 'Brazil' },
+    { code: 'RU', name: 'Russia' },
+    { code: 'PL', name: 'Poland' },
+    { code: 'UA', name: 'Ukraine' },
+    { code: 'DE', name: 'Germany' },
+    { code: 'FI', name: 'Finland' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'CN', name: 'China' },
+    { code: 'ES', name: 'Spain' },
+];
+
 export const StartScreen: React.FC<StartScreenProps> = ({ onStartGame }) => {
-    const [mode, setMode] = useState<'none' | 'create' | 'manage'>('none');
-    const [teamName, setTeamName] = useState('');
-    const [country, setCountry] = useState('US');
+  const [step, setStep] = useState<'MODE_SELECTION' | 'CREATE_TEAM'>('MODE_SELECTION');
+  const [teamName, setTeamName] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('US');
 
-    const countries = [
-        { code: 'US', name: 'United States' },
-        { code: 'DK', name: 'Denmark' },
-        { code: 'FR', name: 'France' },
-        { code: 'SE', name: 'Sweden' },
-        { code: 'BR', name: 'Brazil' },
-        { code: 'RU', name: 'Russia' },
-        { code: 'PL', name: 'Poland' },
-        { code: 'UA', name: 'Ukraine' },
-        { code: 'DE', name: 'Germany' },
-        { code: 'FI', name: 'Finland' },
-        { code: 'CA', name: 'Canada' },
-        { code: 'GB', name: 'United Kingdom' },
-        { code: 'AU', name: 'Australia' },
-        { code: 'CN', name: 'China' },
-        { code: 'ES', name: 'Spain' },
-    ];
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (teamName.trim().length > 0) {
+      onStartGame(teamName, selectedCountry);
+    }
+  };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (teamName.trim()) {
-            onStartGame(teamName, country);
-        }
-    };
+  if (step === 'MODE_SELECTION') {
+      return (
+          <div className="w-full h-full bg-fm-bg flex items-center justify-center p-4 relative overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-fm-card/50 via-fm-bg to-black opacity-60"></div>
+              
+              <div className="relative z-10 max-w-4xl w-full animate-fade-in">
+                  <div className="text-center mb-12">
+                      <div className="flex justify-center mb-6">
+                        <div className="w-24 h-24 bg-fm-accent rounded-2xl flex items-center justify-center shadow-[0_0_50px_rgba(217,70,239,0.3)] border-4 border-white/10">
+                            <Crosshair size={48} className="text-white" />
+                        </div>
+                      </div>
+                      <h1 className="text-4xl md:text-6xl font-black italic text-white tracking-tighter mb-4">
+                          SELECT GAME MODE
+                      </h1>
+                      <div className="h-1 w-24 bg-fm-accent mx-auto rounded-full"></div>
+                  </div>
 
-    return (
-        <div className="w-full min-h-screen bg-fm-bg flex items-center justify-center p-6 relative overflow-hidden">
-            {/* Background Elements */}
-            <div className="absolute top-0 left-0 w-full h-1/2 bg-fm-accent/5 blur-[120px] pointer-events-none"></div>
-            <div className="absolute bottom-0 right-0 w-full h-1/2 bg-blue-600/5 blur-[120px] pointer-events-none"></div>
-            
-            <div className="relative z-10 max-w-4xl w-full">
-                <div className="text-center mb-12">
-                    <h1 className="text-6xl font-black tracking-tighter italic text-white mb-2 drop-shadow-lg">
-                        <span className="text-fm-accent">CS</span>:MANAGER
-                    </h1>
-                    <p className="text-xl text-fm-muted font-light tracking-wide">The Ultimate AI-Powered Esports Simulator</p>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4">
+                      {/* OPTION 1: CREATE CLUB */}
+                      <button 
+                          onClick={() => setStep('CREATE_TEAM')}
+                          className="bg-fm-card border border-fm-border hover:border-fm-accent group p-8 rounded-2xl text-left transition-all hover:shadow-[0_0_30px_rgba(217,70,239,0.2)] hover:-translate-y-1 relative overflow-hidden"
+                      >
+                          <div className="absolute top-0 right-0 p-24 bg-fm-accent blur-[100px] opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                          <div className="w-16 h-16 bg-fm-accent rounded-xl flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform">
+                              <PlusCircle size={32} className="text-white" />
+                          </div>
+                          <h2 className="text-2xl font-black text-white italic uppercase mb-2">Create Your Club</h2>
+                          <p className="text-fm-muted text-sm leading-relaxed">
+                              Start from scratch in ESEA Open. Scout unknown talents, manage finances, and climb the ladder to the Major.
+                          </p>
+                          <div className="mt-6 flex items-center gap-2 text-fm-accent font-bold text-xs uppercase tracking-widest group-hover:translate-x-2 transition-transform">
+                              Start Career <ChevronLeft className="rotate-180" size={14} />
+                          </div>
+                      </button>
 
-                {mode === 'none' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Create Team Option */}
-                        <button 
-                            onClick={() => setMode('create')}
-                            className="group bg-fm-card border border-fm-border hover:border-fm-accent p-8 rounded-2xl transition-all shadow-xl hover:shadow-[0_0_30px_rgba(217,70,239,0.2)] text-left relative overflow-hidden w-full"
+                      {/* OPTION 2: REAL TEAM */}
+                      <button 
+                          disabled
+                          className="bg-fm-bg border border-fm-border p-8 rounded-2xl text-left relative overflow-hidden opacity-60 cursor-not-allowed grayscale"
+                      >
+                          <div className="absolute inset-0 bg-stripes opacity-5"></div>
+                          <div className="w-16 h-16 bg-fm-card border border-fm-border rounded-xl flex items-center justify-center mb-6">
+                              <Globe size={32} className="text-gray-500" />
+                          </div>
+                          <div className="flex justify-between items-start">
+                              <h2 className="text-2xl font-black text-gray-400 italic uppercase mb-2">Real Team</h2>
+                              <span className="bg-fm-card border border-fm-border px-2 py-1 text-[9px] font-bold text-gray-500 uppercase rounded">Coming Soon</span>
+                          </div>
+                          <p className="text-gray-600 text-sm leading-relaxed">
+                              Take control of an existing powerhouse like FaZe, Vitality, or G2. Manage superstars and win trophies immediately.
+                          </p>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )
+  }
+
+  // CREATE TEAM SCREEN
+  return (
+    <div className="w-full h-full bg-fm-bg flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-fm-card/50 via-fm-bg to-black opacity-60"></div>
+      
+      <div className="relative z-10 w-full max-w-2xl bg-fm-card border border-fm-border rounded-2xl shadow-2xl p-8 animate-fade-in">
+        
+        <button 
+            onClick={() => setStep('MODE_SELECTION')}
+            className="absolute top-8 left-8 text-fm-muted hover:text-white flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors"
+        >
+            <ChevronLeft size={16} /> Back
+        </button>
+
+        <div className="text-center mb-8 mt-4">
+             <div className="w-16 h-16 bg-fm-accent rounded-xl flex items-center justify-center shadow-[0_0_30px_rgba(217,70,239,0.3)] mx-auto mb-4 border-2 border-white/10">
+                <Trophy size={32} className="text-white" />
+            </div>
+            <h1 className="text-3xl font-black italic text-white tracking-tighter mb-2">TEAM CREATION</h1>
+            <p className="text-fm-muted text-sm">Define your identity.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-8 max-w-md mx-auto">
+            <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Team Name</label>
+                <input 
+                    type="text" 
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="e.g. Astralis"
+                    className="w-full bg-fm-bg border border-fm-border rounded-lg px-4 py-3 text-white font-bold placeholder-gray-700 focus:border-fm-accent focus:ring-1 focus:ring-fm-accent outline-none transition-all"
+                    autoFocus
+                />
+            </div>
+
+            <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Region</label>
+                <div className="grid grid-cols-5 gap-2">
+                    {COUNTRIES.map(c => (
+                        <button
+                            key={c.code}
+                            type="button"
+                            onClick={() => setSelectedCountry(c.code)}
+                            className={`aspect-square rounded-lg border flex items-center justify-center transition-all ${selectedCountry === c.code ? 'bg-fm-accent/20 border-fm-accent ring-1 ring-fm-accent/50' : 'bg-fm-bg border-fm-border hover:border-gray-500 opacity-60 hover:opacity-100'}`}
+                            title={c.name}
                         >
-                            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <UserPlus size={120} />
-                            </div>
-                            <div className="relative z-10">
-                                <div className="w-16 h-16 bg-fm-accent/10 rounded-xl flex items-center justify-center text-fm-accent mb-6 group-hover:scale-110 transition-transform">
-                                    <UserPlus size={32} />
-                                </div>
-                                <h2 className="text-2xl font-bold text-white mb-2">Create New Team</h2>
-                                <p className="text-fm-muted mb-6 text-sm leading-relaxed">Start from scratch in the Open League. Draft your own roster and climb the ranks to glory.</p>
-                                <div className="flex items-center text-fm-accent font-bold uppercase tracking-widest text-sm group-hover:translate-x-1 transition-transform">
-                                    Start Career <ChevronRight className="ml-1" size={16} />
-                                </div>
-                            </div>
+                            <CountryFlag countryCode={c.code} className="h-4 w-auto" />
                         </button>
-
-                        {/* Existing Team Option (Locked) */}
-                        <div className="bg-fm-card/50 border border-fm-border/50 p-8 rounded-2xl relative overflow-hidden w-full">
-                             <div className="absolute inset-0 flex items-center justify-center z-20 bg-fm-bg/60 backdrop-blur-[1px]">
-                                <div className="flex items-center gap-2 text-fm-muted bg-fm-card px-4 py-2 rounded-full border border-fm-border">
-                                    <Lock size={14} />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest">Coming Soon</span>
-                                </div>
-                             </div>
-                             <div className="relative z-10 opacity-40 grayscale">
-                                <div className="w-16 h-16 bg-gray-800 rounded-xl flex items-center justify-center text-gray-500 mb-6">
-                                    <Shield size={32} />
-                                </div>
-                                <h2 className="text-2xl font-bold text-gray-300 mb-2">Manage Pro Team</h2>
-                                <p className="text-gray-500 mb-6 text-sm leading-relaxed">Take control of a real world powerhouse like Vitality or G2. Handle high budgets and superstar egos.</p>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="max-w-md mx-auto animate-fade-in w-full">
-                        <div className="bg-fm-card border border-fm-border rounded-2xl p-8 shadow-2xl">
-                            <div className="flex items-center gap-2 mb-8 text-fm-muted hover:text-white cursor-pointer w-fit transition-colors group" onClick={() => setMode('none')}>
-                                <div className="p-1 rounded-full bg-fm-bg border border-fm-border group-hover:border-fm-accent">
-                                    <ChevronRight size={14} className="rotate-180" />
-                                </div>
-                                <span className="text-xs font-bold uppercase tracking-widest">Back to Menu</span>
-                            </div>
-                            
-                            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-lg bg-fm-accent/10 flex items-center justify-center text-fm-accent">
-                                    <UserPlus size={20} /> 
-                                </div>
-                                Team Setup
-                            </h2>
-
-                            <form onSubmit={handleSubmit} className="space-y-6">
-                                <div>
-                                    <label className="block text-xs font-bold text-fm-muted uppercase tracking-widest mb-2">Team Name</label>
-                                    <input 
-                                        type="text" 
-                                        value={teamName}
-                                        onChange={(e) => setTeamName(e.target.value)}
-                                        className="w-full bg-fm-bg border border-fm-border rounded-lg p-4 text-white focus:border-fm-accent focus:ring-1 focus:ring-fm-accent/50 focus:outline-none transition-all font-bold text-lg placeholder:text-gray-700"
-                                        placeholder="e.g. Cloud99"
-                                        maxLength={20}
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-fm-muted uppercase tracking-widest mb-2">Home Country</label>
-                                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                                        {countries.map((c) => (
-                                            <button
-                                                key={c.code}
-                                                type="button"
-                                                onClick={() => setCountry(c.code)}
-                                                className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${
-                                                    country === c.code 
-                                                    ? 'bg-fm-accent/20 border-fm-accent text-white shadow-[0_0_10px_rgba(217,70,239,0.2)]' 
-                                                    : 'bg-fm-bg border-fm-border text-fm-muted hover:bg-fm-card-hover hover:border-gray-600'
-                                                }`}
-                                            >
-                                                <CountryFlag countryCode={c.code} className="h-4 mb-1" />
-                                                <span className="text-[10px] font-bold uppercase">{c.code}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <button 
-                                    type="submit"
-                                    className="w-full py-4 bg-fm-accent hover:bg-fm-accent-hover text-white font-bold uppercase tracking-widest rounded-lg shadow-lg transition-all transform hover:scale-[1.02] mt-4 flex items-center justify-center gap-2"
-                                >
-                                    Create Team <Play size={16} className="fill-current" />
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                <div className="mt-12 text-center text-fm-muted text-[10px] uppercase tracking-widest opacity-50">
-                    © 2025 CS:MANAGER AI • POWERED BY GEMINI
+                    ))}
                 </div>
             </div>
-        </div>
-    );
+
+            <div className="pt-4">
+                <button 
+                    type="submit" 
+                    disabled={!teamName.trim()}
+                    className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-sm transition-all flex items-center justify-center gap-2
+                        ${teamName.trim() 
+                            ? 'bg-fm-accent hover:bg-fm-accent-hover text-white shadow-lg hover:shadow-purple-500/30 hover:-translate-y-1' 
+                            : 'bg-fm-bg border border-fm-border text-gray-600 cursor-not-allowed'}`
+                    }
+                >
+                    Sign Contract & Begin
+                </button>
+            </div>
+        </form>
+      </div>
+    </div>
+  );
 };

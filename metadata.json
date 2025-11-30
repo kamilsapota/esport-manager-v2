@@ -1,5 +1,5 @@
 {
-  "name": "CS:GO Manager AI",
+  "name": "CS:GO Manager AI2",
   "description": "A Counter-Strike eSports management simulator where you build a roster, scout AI-generated talent, and simulate matches with narrative commentary powered by Gemini.",
   "requestFramePermissions": []
 }

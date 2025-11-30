@@ -1,4 +1,5 @@
 
+
 import { Team, Player, PlayerRole, League, PlayerStats, TrainingIntensity } from '../types';
 
 // --- NAME DATABASE ---
@@ -243,7 +244,9 @@ const createTeam = (name: string, country: string, league: League, avgRating: nu
     rankingPoints: Math.floor(avgRating * 10), // Default
     mapStats,
     permaban: permaban, // Assign the worst map as their permaban
-    weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM)
+    weeklySchedule: Array(7).fill(TrainingIntensity.MEDIUM),
+    coaches: [],
+    automationConfig: { autoMapTraining: false, autoSchedule: false, autoIndividual: true }
   };
 };
 

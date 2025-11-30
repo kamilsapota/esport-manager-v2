@@ -72,6 +72,20 @@ export interface MapPracticeStats {
     strat: number;
 }
 
+export interface Coach {
+    id: string;
+    name: string;
+    type: 'HEAD' | 'PERFORMANCE';
+    assignedPlayerId?: string; // For Performance coaches
+    focus?: 'LOWEST' | 'ROLE' | 'BALANCED';
+}
+
+export interface AutomationConfig {
+    autoMapTraining: boolean;
+    autoSchedule: boolean;
+    autoIndividual: boolean;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -98,6 +112,9 @@ export interface Team {
   weeklySchedule: TrainingIntensity[];
   
   preferredTactic?: Tactic;
+  
+  coaches: Coach[];
+  automationConfig: AutomationConfig;
 }
 
 export interface KillEvent {
@@ -144,6 +161,7 @@ export interface MatchResult {
   playerStatsUs: PlayerMatchStats[];
   playerStatsEnemy: PlayerMatchStats[];
   mapPlayed?: string;
+  isPlayoff?: boolean;
 }
 
 export interface LeagueRoundResult {
@@ -166,6 +184,7 @@ export interface OpponentAnalysis {
   bestMapWinRate?: number;
   worstMap?: string;
   worstMapWinRate?: number;
+  suggestedTactic: Tactic;
 }
 
 export interface ScheduledMatch {
@@ -173,8 +192,9 @@ export interface ScheduledMatch {
     date: string;
     opponentId: string;
     isPlayed: boolean;
-    type: 'LEAGUE' | 'TOURNAMENT' | 'PRACTICE';
+    type: 'LEAGUE' | 'TOURNAMENT' | 'PRACTICE' | 'PLAYOFF';
     leagueName?: string;
+    playoffRound?: 'QF' | 'SF' | 'F';
 }
 
 export enum GameView {
@@ -198,3 +218,37 @@ export interface Tournament {
   prizePool: number;
   participationStatus: ParticipationStatus;
 }
+
+export type SeasonPhase = 'REGULAR' | 'PLAYOFFS' | 'OFF_SEASON';
+
+export interface PlayoffMatch {
+    id: string;
+    round: 'QF' | 'SF' | 'F';
+    teamA: Team;
+    teamB: Team;
+    scoreA?: number;
+    scoreB?: number;
+    winner?: Team;
+    date: string;
+    isPlayed: boolean;
+}
+
+export interface SeriesState {
+    active: boolean;
+    maps: string[]; // [Pick1, Pick2, Decider]
+    currentMapIndex: number;
+    scoreUs: number;
+    scoreEnemy: number;
+}
+
+// SHARED DRILL DEFINITIONS
+export type DrillType = 'DEATHMATCH' | 'RETAKE' | 'GRENADE' | 'DEMO' | 'SCRIM' | 'REACTION';
+
+export const DRILLS: { id: DrillType, name: string, main: keyof PlayerStats, sub: keyof PlayerStats, desc: string }[] = [
+    { id: 'DEATHMATCH', name: 'Deathmatch Session', main: 'aim', sub: 'reflex', desc: '+Aim, +Reflex' },
+    { id: 'RETAKE', name: 'Retake Scenarios', main: 'clutch', sub: 'strategy', desc: '+Clutch, +Strategy' },
+    { id: 'GRENADE', name: 'Grenade Lineups', main: 'utility', sub: 'strategy', desc: '+Utility, +Strategy' },
+    { id: 'DEMO', name: 'Demo Review', main: 'strategy', sub: 'teamwork', desc: '+Strategy, +Teamwork' },
+    { id: 'SCRIM', name: '5vs5 Scrim', main: 'teamwork', sub: 'clutch', desc: '+Teamwork, +Mental' },
+    { id: 'REACTION', name: 'Reaction Test', main: 'reflex', sub: 'aim', desc: '+Reflex, +Aim' },
+];

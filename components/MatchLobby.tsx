@@ -1,8 +1,8 @@
 
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Team, Tactic, OpponentAnalysis, Player } from '../types';
-import { Trophy, Shield, Swords, Play, Brain, Search, Loader2, Crosshair, Lock, Calendar } from 'lucide-react';
+import { Trophy, Shield, Swords, Play, Brain, Search, Loader2, Crosshair, Lock, Calendar, CheckCircle, TrendingUp, AlertTriangle, Bug } from 'lucide-react';
 import { CountryFlag } from './CountryFlag';
 
 interface MatchLobbyProps {
@@ -15,6 +15,7 @@ interface MatchLobbyProps {
   onSetTactic: (tactic: Tactic) => void;
   isMatchDay: boolean;
   matchDate?: string;
+  onDevSim?: (result: 'win' | 'loss') => void;
 }
 
 const RosterRow: React.FC<{ player: Player; isEnemy?: boolean }> = ({ player, isEnemy }) => {
@@ -80,9 +81,35 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
     onStartMatch, 
     onSetTactic,
     isMatchDay,
-    matchDate
+    matchDate,
+    onDevSim
 }) => {
   const [selectedTactic, setSelectedTactic] = useState<Tactic>(myTeam.preferredTactic || Tactic.DEFAULT);
+  const [loadingText, setLoadingText] = useState('Initializing scan...');
+  const [showDevTools, setShowDevTools] = useState(false);
+
+  const isTBD = opponent.id === 'temp-id' || opponent.name === 'TBD';
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isAnalyzing) {
+        const statuses = [
+            "Connecting to HLTV Database...",
+            "Downloading Recent Demos...",
+            "Analyzing Player Pathing...",
+            "Identifying Weaknesses...",
+            "Simulating Tactical Outcomes...",
+            "Finalizing Coach Report..."
+        ];
+        let i = 0;
+        setLoadingText(statuses[0]);
+        interval = setInterval(() => {
+            i = (i + 1) % statuses.length;
+            setLoadingText(statuses[i]);
+        }, 1600); // Change text every 1.6s
+    }
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
   const handleTacticChange = (tactic: Tactic) => {
       setSelectedTactic(tactic);
@@ -94,16 +121,50 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
   }) : "Upcoming";
 
   return (
-    <div className="h-full flex flex-col max-w-7xl mx-auto p-6 animate-fade-in">
+    <div className="h-full flex flex-col max-w-7xl mx-auto p-6 animate-fade-in pb-20">
         {/* Match Header */}
-        <div className="text-center mb-8 shrink-0">
+        <div className="text-center mb-8 shrink-0 relative">
             <div className="flex items-center justify-center gap-2 mb-2 text-fm-accent font-bold uppercase tracking-widest text-xs bg-fm-accent/10 inline-block px-3 py-1 rounded-full border border-fm-accent/20">
                 <Trophy size={12} /> {myTeam.league} Matchday
             </div>
             <h1 className="text-4xl md:text-5xl font-black text-white italic tracking-tighter">
                 MATCH LOBBY
             </h1>
+            
+            {/* DEV TOOLS TOGGLE */}
+            {onDevSim && !isTBD && (
+                <button 
+                    onClick={() => setShowDevTools(!showDevTools)}
+                    className="absolute right-0 top-0 p-2 text-fm-muted hover:text-white opacity-20 hover:opacity-100 transition-opacity"
+                    title="Developer Tools"
+                >
+                    <Bug size={16} />
+                </button>
+            )}
         </div>
+        
+        {/* DEV TOOLS BAR */}
+        {showDevTools && onDevSim && isMatchDay && !isTBD && (
+            <div className="bg-fm-card border border-fm-red/50 p-4 rounded-xl mb-6 flex items-center justify-between shadow-xl animate-fade-in">
+                <div className="flex items-center gap-2 text-fm-red font-bold uppercase text-xs">
+                    <Bug size={16} /> Developer Quick Sim
+                </div>
+                <div className="flex gap-4">
+                    <button 
+                        onClick={() => onDevSim('win')}
+                        className="bg-fm-green text-black px-4 py-2 rounded font-black uppercase text-xs hover:bg-white transition-colors"
+                    >
+                        Force Win (13-5)
+                    </button>
+                    <button 
+                        onClick={() => onDevSim('loss')}
+                        className="bg-fm-red text-white px-4 py-2 rounded font-black uppercase text-xs hover:bg-red-400 transition-colors"
+                    >
+                        Force Loss (5-13)
+                    </button>
+                </div>
+            </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
              
@@ -142,7 +203,9 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
                          <div className="flex items-center justify-center gap-12 mb-4">
                              <div className="text-6xl font-black text-white drop-shadow-lg">{myTeam.name.substring(0,3).toUpperCase()}</div>
                              <Swords size={40} className="text-fm-accent animate-pulse" />
-                             <div className="text-6xl font-black text-fm-red drop-shadow-lg">{opponent.name.substring(0,3).toUpperCase()}</div>
+                             <div className="text-6xl font-black text-fm-red drop-shadow-lg">
+                                 {isTBD ? '???' : opponent.name.substring(0,3).toUpperCase()}
+                             </div>
                          </div>
                          <div className="text-fm-muted font-mono text-xs uppercase tracking-widest">Best of 1 • Map Veto Next</div>
                     </div>
@@ -151,10 +214,17 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
                 {/* ANALYSIS CARD */}
                 <div className="bg-fm-card border border-fm-border rounded-xl p-6 flex-1 flex flex-col shadow-lg">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-                            <Brain className="text-fm-accent" size={16} /> Tactical Analysis
-                        </h3>
-                        {!analysis && !isAnalyzing && (
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wide">
+                                <Brain className="text-fm-accent" size={16} /> Tactical Analysis
+                            </h3>
+                            {analysis && (
+                                <span className="text-[10px] font-bold bg-fm-green/20 text-fm-green px-2 py-0.5 rounded border border-fm-green/50 flex items-center gap-1 animate-pulse">
+                                    <TrendingUp size={10} /> +2% Win Chance
+                                </span>
+                            )}
+                        </div>
+                        {!analysis && !isAnalyzing && !isTBD && (
                             <button 
                                 onClick={onAnalyze}
                                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors"
@@ -165,43 +235,65 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
                     </div>
 
                     <div className="flex-1 bg-fm-bg rounded-xl border border-fm-border p-4 relative overflow-hidden">
-                        {isAnalyzing ? (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-fm-bg/90 z-10">
-                                <Loader2 size={32} className="text-fm-accent animate-spin" />
-                                <span className="text-fm-accent font-mono text-xs animate-pulse">Processing match data...</span>
+                        {isTBD ? (
+                            <div className="flex flex-col items-center justify-center h-full text-fm-muted gap-2">
+                                <Lock size={48} className="opacity-10" />
+                                <p className="text-sm font-bold">Opponent Pending</p>
+                                <p className="text-xs opacity-60">Waiting for other matches to conclude...</p>
+                            </div>
+                        ) : isAnalyzing ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-fm-bg/95 z-10">
+                                <Loader2 size={40} className="text-fm-accent animate-spin" />
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="text-white font-mono font-bold text-sm tracking-wider animate-pulse">{loadingText}</span>
+                                    <div className="w-32 h-1 bg-fm-card rounded-full overflow-hidden mt-2">
+                                        <div className="h-full bg-fm-accent animate-[shimmer_2s_infinite]"></div>
+                                    </div>
+                                </div>
                             </div>
                         ) : analysis ? (
                             <div className="space-y-4 animate-fade-in h-full overflow-y-auto custom-scrollbar pr-2">
-                                <div>
-                                    <div className="text-[10px] font-bold text-fm-muted uppercase tracking-widest mb-1">Opponent Strategy</div>
-                                    <div className="text-white font-bold text-base">{analysis.strategy}</div>
-                                    <p className="text-xs text-gray-400 mt-2 leading-relaxed">{analysis.overview}</p>
-                                </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-fm-green/10 border border-fm-green/20 p-3 rounded-lg">
-                                        <div className="text-[10px] font-bold text-fm-green uppercase mb-1">Strengths</div>
-                                        <ul className="text-[10px] text-gray-300 space-y-1 list-disc pl-4">
-                                            {analysis.strengths.map((s, i) => <li key={i}>{s}</li>)}
-                                        </ul>
+                                    <div className="bg-fm-card p-3 rounded border border-fm-border">
+                                        <div className="text-[10px] text-fm-muted font-bold uppercase mb-1">Coach Suggests</div>
+                                        <div className="text-fm-accent font-black text-lg uppercase">{analysis.suggestedTactic}</div>
+                                        <div className="text-[9px] text-gray-500">Best counter to their style.</div>
                                     </div>
-                                    <div className="bg-fm-red/10 border border-fm-red/20 p-3 rounded-lg">
-                                        <div className="text-[10px] font-bold text-fm-red uppercase mb-1">Weaknesses</div>
-                                        <ul className="text-[10px] text-gray-300 space-y-1 list-disc pl-4">
-                                            {analysis.weaknesses.map((w, i) => <li key={i}>{w}</li>)}
-                                        </ul>
+                                    <div className="bg-fm-card p-3 rounded border border-fm-border">
+                                        <div className="text-[10px] text-fm-muted font-bold uppercase mb-1">Opponent Style</div>
+                                        <div className="text-white font-black text-lg uppercase">{analysis.strategy}</div>
+                                        <div className="text-[9px] text-gray-500">{analysis.overview}</div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3 pt-2 border-t border-fm-border">
-                                    <div className="flex-1">
-                                        <div className="text-[10px] text-fm-muted uppercase font-bold">Key Player</div>
-                                        <div className="font-bold text-white text-sm">{analysis.keyPlayer}</div>
-                                    </div>
-                                    <div className="flex-1 text-right">
-                                        <div className="text-[10px] text-fm-muted uppercase font-bold">Win Prob.</div>
-                                        <div className={`font-mono font-bold text-lg ${analysis.winProbability >= 50 ? 'text-fm-green' : 'text-fm-red'}`}>
-                                            {analysis.winProbability}%
+
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                     <div>
+                                         <div className="text-[10px] font-bold text-fm-green uppercase mb-1 flex items-center gap-1">
+                                             <TrendingUp size={10} /> Best Map
+                                         </div>
+                                         <div className="font-bold text-white">{analysis.bestMap}</div>
+                                         <div className="text-[9px] text-gray-500">{analysis.bestMapWinRate}% Proficiency</div>
+                                     </div>
+                                     <div>
+                                         <div className="text-[10px] font-bold text-fm-red uppercase mb-1 flex items-center gap-1">
+                                             <AlertTriangle size={10} /> Worst Map
+                                         </div>
+                                         <div className="font-bold text-white">{analysis.worstMap}</div>
+                                         <div className="text-[9px] text-gray-500">{analysis.worstMapWinRate}% Proficiency</div>
+                                     </div>
+                                </div>
+                                
+                                <div className="bg-fm-card border border-fm-border p-3 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-fm-bg rounded flex items-center justify-center font-bold text-white border border-fm-border">
+                                            {analysis.keyPlayer.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] text-fm-muted uppercase font-bold">Key Player</div>
+                                            <div className="font-bold text-white text-sm">{analysis.keyPlayer}</div>
                                         </div>
                                     </div>
+                                    <div className="mt-2 text-[10px] text-gray-400 italic">"{analysis.keyPlayerReason}"</div>
                                 </div>
                             </div>
                         ) : (
@@ -214,7 +306,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
                     </div>
                 </div>
                 
-                {isMatchDay ? (
+                {isMatchDay && !isTBD ? (
                     <button 
                         onClick={onStartMatch}
                         className="w-full py-5 bg-fm-accent hover:bg-fm-accent-hover text-white font-black text-xl uppercase tracking-widest rounded-xl shadow-[0_0_30px_rgba(217,70,239,0.3)] hover:shadow-[0_0_40px_rgba(217,70,239,0.5)] transition-all transform hover:-translate-y-1 flex items-center justify-center gap-4"
@@ -226,10 +318,10 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
                     <div className="w-full py-5 bg-fm-card border border-fm-border text-fm-muted font-bold uppercase tracking-widest rounded-xl flex flex-col items-center justify-center gap-2 cursor-not-allowed relative overflow-hidden group">
                          <div className="absolute inset-0 bg-stripes opacity-5"></div>
                          <div className="flex items-center gap-2 text-sm">
-                            <Lock size={16} /> Locked
+                            <Lock size={16} /> {isTBD ? 'Awaiting Opponent' : 'Locked'}
                          </div>
                          <div className="text-xs text-gray-500 flex items-center gap-1">
-                            <Calendar size={12} /> Match Date: {formattedDate}
+                            <Calendar size={12} /> {isTBD ? 'Proceed to Schedule' : `Match Date: ${formattedDate}`}
                          </div>
                     </div>
                 )}
@@ -238,11 +330,21 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
              {/* RIGHT: ENEMY TEAM */}
              <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col">
                  <div className="p-5 border-b border-fm-border bg-fm-card-hover text-center">
-                    <h2 className="text-xl font-black text-fm-red uppercase tracking-tight">{opponent.name}</h2>
-                    <div className="text-fm-red/70 font-bold text-[10px] uppercase tracking-widest mt-1">Rank #{opponent.rankingPoints}</div>
+                    <h2 className="text-xl font-black text-fm-red uppercase tracking-tight">
+                        {isTBD ? 'Awaiting...' : opponent.name}
+                    </h2>
+                    <div className="text-fm-red/70 font-bold text-[10px] uppercase tracking-widest mt-1">
+                        Rank #{opponent.rankingPoints || '---'}
+                    </div>
                  </div>
                  <div className="p-3 space-y-1 flex-1 overflow-y-auto custom-scrollbar">
-                    {opponent.players.map(p => <RosterRow key={p.id} player={p} isEnemy={true} />)}
+                    {isTBD ? (
+                        <div className="h-full flex flex-col items-center justify-center text-fm-muted italic text-xs">
+                            Opponent TBD
+                        </div>
+                    ) : (
+                        opponent.players.map(p => <RosterRow key={p.id} player={p} isEnemy={true} />)
+                    )}
                  </div>
                  <div className="p-4 bg-fm-bg border-t border-fm-border text-center">
                     <div className="text-[10px] font-bold text-fm-muted uppercase tracking-widest mb-2">Enemy Focus</div>

@@ -1,6 +1,3 @@
-
-
-
 import React, { useState } from 'react';
 import { Team, ScheduledMatch, Player } from '../types';
 import { PlayerCard } from './PlayerCard';
@@ -54,7 +51,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Calculate Real Team Stats
   const calculateAvgRating = () => {
       if (team.players.length === 0) return 0;
-      const totalStats = team.players.reduce((acc, p) => {
+      const totalStats = team.players.reduce((acc: number, p) => {
           const avgP = (p.stats.aim + p.stats.reflex + p.stats.strategy + p.stats.utility + p.stats.teamwork + p.stats.clutch) / 6;
           return acc + avgP;
       }, 0);
@@ -62,7 +59,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const calculateMapMastery = () => {
-      const maps = Object.values(team.mapStats);
+      const maps = Object.values(team.mapStats) as number[];
       if (maps.length === 0) return 0;
       const total = maps.reduce((acc, val) => acc + val, 0);
       return (total / maps.length).toFixed(0);
