@@ -737,9 +737,10 @@ export default function App() {
       let newOpponents: Team[] = [];
       if (promoted) {
           const leagues = Object.values(League);
-          const nextLeague = leagues[leagues.indexOf(myTeam.league) + 1];
-          if (nextLeague) {
-               newOpponents = TEAMS_BY_LEAGUE[nextLeague as League]?.slice(0, 19) || []; 
+          const currentIdx = leagues.indexOf(myTeam.league);
+          if (currentIdx !== -1 && currentIdx < leagues.length - 1) {
+              const nextLeague = leagues[currentIdx + 1];
+              newOpponents = TEAMS_BY_LEAGUE[nextLeague as League]?.slice(0, 19) || []; 
           }
       } else {
            newOpponents = leagueOpponents.map(t => resetStats(t));
@@ -820,7 +821,7 @@ export default function App() {
               const matchId = schedule.find(s => !s.isPlayed)?.id;
               if (matchId) {
                   // Advance User
-                  let updatedBracket = advancePlayoffBracket(matchId, seriesWin ? myTeam : (liveMatchData?.enemy || nextOpponent || EMPTY_TEAM), newScoreUs, newScoreEnemy);
+                  let updatedBracket: PlayoffMatch[] = advancePlayoffBracket(matchId, seriesWin ? myTeam : (liveMatchData?.enemy || nextOpponent || EMPTY_TEAM), newScoreUs, newScoreEnemy);
                   
                   // Simulate other matches in this round
                   const currentMatch = updatedBracket.find(m => m.id === matchId);
@@ -854,9 +855,9 @@ export default function App() {
                                
                                // Ensure opponent is set correctly even if TBD (handled by ID check)
                                // Explicit access to avoid TS inference issues
-                               const tA = nextM.teamA;
-                               const tB = nextM.teamB;
-                               const nextOpponentId = tA.id === myTeam.id ? tB.id : tA.id;
+                               const tA: Team = nextM.teamA;
+                               const tB: Team = nextM.teamB;
+                               const nextOpponentId = (tA.id as string) === (myTeam.id as string) ? tB.id : tA.id;
                                
                                setSchedule([{
                                    id: nextM.id,
