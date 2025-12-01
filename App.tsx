@@ -736,10 +736,10 @@ export default function App() {
 
       let newOpponents: Team[] = [];
       if (promoted) {
-          const nextLeague = Object.values(League)[Object.values(League).indexOf(myTeam.league) + 1];
-          // Fix TS2872: Check if nextLeague is valid before accessing TEAMS_BY_LEAGUE
-          if (nextLeague && TEAMS_BY_LEAGUE[nextLeague]) {
-              newOpponents = TEAMS_BY_LEAGUE[nextLeague].slice(0, 19); 
+          const leagues = Object.values(League);
+          const nextLeague = leagues[leagues.indexOf(myTeam.league) + 1];
+          if (nextLeague) {
+               newOpponents = TEAMS_BY_LEAGUE[nextLeague as League]?.slice(0, 19) || []; 
           }
       } else {
            newOpponents = leagueOpponents.map(t => resetStats(t));
@@ -853,7 +853,10 @@ export default function App() {
                                nextDate.setDate(nextDate.getDate() + 2); // 1 Day Break
                                
                                // Ensure opponent is set correctly even if TBD (handled by ID check)
-                               const nextOpponentId = nextM.teamA.id === myTeam.id ? nextM.teamB.id : nextM.teamA.id;
+                               // Explicit access to avoid TS inference issues
+                               const tA = nextM.teamA;
+                               const tB = nextM.teamB;
+                               const nextOpponentId = tA.id === myTeam.id ? tB.id : tA.id;
                                
                                setSchedule([{
                                    id: nextM.id,
