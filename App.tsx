@@ -741,7 +741,7 @@ export default function App() {
       let newOpponents: Team[] = [];
       if (promoted) {
           const nextLeague = Object.values(League)[Object.values(League).indexOf(myTeam.league) + 1];
-          if (nextLeague && TEAMS_BY_LEAGUE[nextLeague]) {
+          if (nextLeague) {
               newOpponents = TEAMS_BY_LEAGUE[nextLeague].slice(0, 19); 
           }
       } else {
@@ -850,13 +850,15 @@ export default function App() {
                       } else {
                           // Schedule Next match for User
                           const nextM = updatedBracket.find(m => !m.isPlayed && (m.teamA.id === myTeam.id || m.teamB.id === myTeam.id));
-                          if (nextM) {
+                          if (nextM && nextM.teamA && nextM.teamB) {
                                // Next match ready
                                const nextDate = new Date(currentDate);
                                nextDate.setDate(nextDate.getDate() + 2); // 1 Day Break
                                
                                // Ensure opponent is set correctly even if TBD (handled by ID check)
-                               const nextOpponentId = nextM.teamA.id === myTeam.id ? nextM.teamB.id : nextM.teamA.id;
+                               const tA = nextM.teamA;
+                               const tB = nextM.teamB;
+                               const nextOpponentId = tA.id === myTeam.id ? tB.id : tA.id;
                                
                                setSchedule([{
                                    id: nextM.id,
@@ -1202,7 +1204,7 @@ export default function App() {
                         onSetTactic={(t) => setMyTeam(prev => ({ ...prev, preferredTactic: t }))}
                         isMatchDay={isMatchDay}
                         matchDate={nextScheduledMatch?.date}
-                        onDevSim={handleDevQuickSim}
+                        onDevSim={nextOpponent ? handleDevQuickSim : undefined}
                       />
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-fm-muted animate-fade-in p-8">
