@@ -737,8 +737,8 @@ export default function App() {
       let newOpponents: Team[] = [];
       if (promoted) {
           const nextLeague = Object.values(League)[Object.values(League).indexOf(myTeam.league) + 1];
-          // Fix TS2872: Check if nextLeague matches a valid key in TEAMS_BY_LEAGUE
-          if (nextLeague && nextLeague in TEAMS_BY_LEAGUE) {
+          // Fix TS2872: Check if nextLeague is valid before accessing TEAMS_BY_LEAGUE
+          if (nextLeague && TEAMS_BY_LEAGUE[nextLeague]) {
               newOpponents = TEAMS_BY_LEAGUE[nextLeague].slice(0, 19); 
           }
       } else {
@@ -846,18 +846,14 @@ export default function App() {
                           setShowSeasonEndOverlay(true);
                       } else {
                           // Schedule Next match for User
-                          // Fix TS2339: Explicitly type nextM
-                          const nextM: PlayoffMatch | undefined = updatedBracket.find(m => !m.isPlayed && (m.teamA.id === myTeam.id || m.teamB.id === myTeam.id));
-                          if (nextM && nextM.teamA && nextM.teamB) {
+                          const nextM = updatedBracket.find(m => !m.isPlayed && (m.teamA.id === myTeam.id || m.teamB.id === myTeam.id));
+                          if (nextM) {
                                // Next match ready
                                const nextDate = new Date(currentDate);
                                nextDate.setDate(nextDate.getDate() + 2); // 1 Day Break
                                
                                // Ensure opponent is set correctly even if TBD (handled by ID check)
-                               // Fix TS2339: Explicit cast or check
-                               const tA: Team = nextM.teamA;
-                               const tB: Team = nextM.teamB;
-                               const nextOpponentId = tA.id === myTeam.id ? tB.id : tA.id;
+                               const nextOpponentId = nextM.teamA.id === myTeam.id ? nextM.teamB.id : nextM.teamA.id;
                                
                                setSchedule([{
                                    id: nextM.id,
