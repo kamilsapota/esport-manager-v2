@@ -241,6 +241,13 @@ export interface SeriesState {
     scoreEnemy: number;
 }
 
+export type DailyGain = {
+  type: 'map' | 'xp' | 'passive' | 'mental';
+  subject: string; 
+  stat?: string;
+  value: number;
+};
+
 // SHARED DRILL DEFINITIONS
 export type DrillType = 'DEATHMATCH' | 'RETAKE' | 'GRENADE' | 'DEMO' | 'SCRIM' | 'REACTION';
 

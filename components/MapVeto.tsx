@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Team } from '../types';
-import { Shield, Ban, CheckCircle, Play, Check } from 'lucide-react';
+import { Shield, Ban, CheckCircle, Play, Check, Flame } from 'lucide-react';
 
 interface MapVetoProps {
     userTeam: Team;
     enemyTeam: Team;
     onComplete: (maps: string[]) => void;
+    bestOf: 1 | 3;
 }
 
 const MAP_POOL = [
@@ -19,60 +20,73 @@ const MAP_POOL = [
     { id: 'Ancient', name: 'Ancient', img: 'https://www.hltv.org/img/static/statsmatchmaps/ancient.png' }
 ];
 
-// SEQUENCE: BAN (User) -> BAN (Enemy) -> PICK (User) -> PICK (Enemy) -> BAN (User) -> BAN (Enemy) -> DECIDER
-type VetoStep = 'BAN' | 'PICK' | 'DECIDER';
-
-export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplete }) => {
+export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplete, bestOf = 1 }) => {
     const [bannedMaps, setBannedMaps] = useState<string[]>([]);
-    const [pickedMaps, setPickedMaps] = useState<string[]>([]); // [UserPick, EnemyPick, Decider]
+    const [pickedMaps, setPickedMaps] = useState<string[]>([]); // BO3: [UserPick, EnemyPick, Decider] | BO1: [PlayedMap]
     const [turn, setTurn] = useState<'user' | 'enemy'>('user');
-    const [stepIndex, setStepIndex] = useState(0); // 0 to 6
+    const [stepIndex, setStepIndex] = useState(0); 
     const [actionLog, setActionLog] = useState<string[]>([]);
+    const [isComplete, setIsComplete] = useState(false);
 
     const getStats = (team: Team, mapId: string) => team.mapStats?.[mapId] || 0;
 
-    // 0: User Ban
-    // 1: Enemy Ban
-    // 2: User Pick
-    // 3: Enemy Pick
-    // 4: User Ban
-    // 5: Enemy Ban
-    // 6: Decider (Auto)
+    // --- LOGIC HELPERS ---
+    
+    // BO1: 6 steps (0-5) are all BANs. Step 6 is auto-decide.
+    // BO3: Steps 0,1,4,5 are BANS. Steps 2,3 are PICKS. Step 6 is auto-decide.
+    
+    const getCurrentPhaseType = (step: number): 'BAN' | 'PICK' | 'DECIDER' => {
+        if (bestOf === 1) {
+            return step < 6 ? 'BAN' : 'DECIDER';
+        } else {
+            if (step === 6) return 'DECIDER';
+            if (step === 2 || step === 3) return 'PICK';
+            return 'BAN';
+        }
+    };
+
+    const currentPhase = getCurrentPhaseType(stepIndex);
 
     useEffect(() => {
-        if (stepIndex === 6) {
-            // Auto Decider
+        // AUTO DECIDER LOGIC (Happens at step 6 for both BO1 and BO3)
+        if (stepIndex === 6 && !isComplete) {
             const remaining = MAP_POOL.find(m => !bannedMaps.includes(m.id) && !pickedMaps.includes(m.id));
+            
             if (remaining) {
-                const finalMaps = [...pickedMaps, remaining.id];
+                let finalMaps: string[] = [];
+                if (bestOf === 1) {
+                    finalMaps = [remaining.id];
+                    setActionLog(prev => [`${remaining.name} is the map to be played`, ...prev]);
+                } else {
+                    finalMaps = [...pickedMaps, remaining.id];
+                    setActionLog(prev => [`${remaining.name} remains as the DECIDER map`, ...prev]);
+                }
                 setPickedMaps(finalMaps);
-                setActionLog(prev => [`${remaining.name} remains as the DECIDER map`, ...prev]);
-                // Brief delay before showing start button or finishing
+                setIsComplete(true);
             }
             return;
         }
 
-        if (turn === 'enemy') {
+        if (turn === 'enemy' && !isComplete) {
             const timer = setTimeout(() => {
                 handleAiTurn();
-            }, 1200);
+            }, 1000);
             return () => clearTimeout(timer);
         }
-    }, [turn, stepIndex, bannedMaps, pickedMaps]);
+    }, [turn, stepIndex, bannedMaps, pickedMaps, isComplete, bestOf]);
 
     const handleAiTurn = () => {
         const availableMaps = MAP_POOL.filter(m => !bannedMaps.includes(m.id) && !pickedMaps.includes(m.id));
-        const currentAction = (stepIndex === 0 || stepIndex === 1 || stepIndex === 4 || stepIndex === 5) ? 'BAN' : 'PICK';
-
         let selectedMap: typeof MAP_POOL[0] | undefined;
 
-        if (currentAction === 'BAN') {
-            // Ban map with highest User Win % or User Advantage
-            // Also prioritize banning own permaban
+        if (currentPhase === 'BAN') {
+            // BAN LOGIC: 
+            // 1. If enemy has a permaban available, ban it.
             if (enemyTeam.permaban && !bannedMaps.includes(enemyTeam.permaban) && !pickedMaps.includes(enemyTeam.permaban)) {
                 selectedMap = availableMaps.find(m => m.id === enemyTeam.permaban);
             }
 
+            // 2. Otherwise ban map where User has biggest advantage
             if (!selectedMap) {
                 let maxDanger = -Infinity;
                 availableMaps.forEach(m => {
@@ -86,12 +100,12 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
                 });
             }
         } else {
-            // PICK: Pick best available map for Enemy
+            // PICK LOGIC (Only BO3): Pick best available map for Enemy
             let maxStrength = -Infinity;
             availableMaps.forEach(m => {
                 const enemyStat = getStats(enemyTeam, m.id);
-                // Also consider if user is bad at it
                 const userStat = getStats(userTeam, m.id);
+                // Strength = My stat minus user stat (weighted)
                 const strength = enemyStat - (userStat * 0.5); 
                 if (strength > maxStrength) {
                     maxStrength = strength;
@@ -100,10 +114,11 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
             });
         }
 
+        // Fallback
         if (!selectedMap) selectedMap = availableMaps[0];
 
         if (selectedMap) {
-            if (currentAction === 'BAN') {
+            if (currentPhase === 'BAN') {
                 setBannedMaps(prev => [...prev, selectedMap!.id]);
                 setActionLog(prev => [`${enemyTeam.name} BANNED ${selectedMap!.name}`, ...prev]);
             } else {
@@ -115,10 +130,10 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
     };
 
     const handleUserAction = (mapId: string) => {
-        if (turn !== 'user') return;
-        const currentAction = (stepIndex === 0 || stepIndex === 1 || stepIndex === 4 || stepIndex === 5) ? 'BAN' : 'PICK';
+        if (turn !== 'user' || isComplete) return;
+        if (bannedMaps.includes(mapId) || pickedMaps.includes(mapId)) return;
 
-        if (currentAction === 'BAN') {
+        if (currentPhase === 'BAN') {
             setBannedMaps(prev => [...prev, mapId]);
             setActionLog(prev => [`You BANNED ${MAP_POOL.find(m => m.id === mapId)?.name}`, ...prev]);
         } else {
@@ -132,55 +147,56 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
         const nextStep = stepIndex + 1;
         setStepIndex(nextStep);
         
-        // Sequence: U(0), E(1), U(2), E(3), U(4), E(5)
-        if (nextStep === 1 || nextStep === 3 || nextStep === 5) {
+        // BO1 Sequence: 0(U), 1(E), 2(U), 3(E), 4(U), 5(E)
+        // BO3 Sequence: 0(U), 1(E), 2(U-Pick), 3(E-Pick), 4(U), 5(E)
+        
+        // Simple modulo for turn doesn't work perfectly if logic changes, but standard is strict alternation
+        if (nextStep % 2 !== 0) {
             setTurn('enemy');
         } else {
             setTurn('user');
         }
     };
 
-    const currentActionText = () => {
-        if (stepIndex === 6) return "Decider Map";
-        const isBan = (stepIndex === 0 || stepIndex === 1 || stepIndex === 4 || stepIndex === 5);
-        return isBan ? 'BAN PHASE' : 'PICK PHASE';
-    };
-
-    const canComplete = pickedMaps.length === 3;
-
     return (
-        <div className="min-h-full bg-fm-bg p-6 flex flex-col items-center animate-fade-in">
+        <div className="min-h-full bg-fm-bg p-6 flex flex-col items-center animate-fade-in pb-20">
             <div className="text-center mb-6">
-                <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter mb-2">Map Veto (Bo3)</h2>
-                <p className="text-fm-muted text-sm">Ban-Ban-Pick-Pick-Ban-Ban-Decider</p>
+                <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter mb-2">
+                    Map Veto ({bestOf === 1 ? 'Bo1' : 'Bo3'})
+                </h2>
+                <p className="text-fm-muted text-sm">
+                    {bestOf === 1 ? 'Ban until one map remains.' : 'Ban-Ban-Pick-Pick-Ban-Ban-Decider.'}
+                </p>
             </div>
 
             {/* STATUS BAR */}
-            <div className="w-full max-w-5xl bg-fm-card border border-fm-border rounded-xl p-4 mb-8 flex justify-between items-center shadow-lg">
-                <div className={`flex items-center gap-3 ${turn === 'user' && !canComplete ? 'opacity-100' : 'opacity-50'}`}>
+            <div className="w-full max-w-5xl bg-fm-card border border-fm-border rounded-xl p-4 mb-8 flex justify-between items-center shadow-lg sticky top-0 z-20">
+                <div className={`flex items-center gap-3 ${turn === 'user' && !isComplete ? 'opacity-100' : 'opacity-50'}`}>
                     <Shield className="text-fm-accent" />
                     <div className="text-left">
                         <div className="text-[10px] text-fm-muted uppercase font-bold">Your Team</div>
-                        <div className={`font-bold text-sm ${turn === 'user' && !canComplete ? 'text-white' : 'text-fm-muted'}`}>
-                            {turn === 'user' && !canComplete ? (stepIndex === 2 ? 'Your Pick' : 'Your Ban') : 'Waiting...'}
+                        <div className={`font-bold text-sm ${turn === 'user' && !isComplete ? 'text-white' : 'text-fm-muted'}`}>
+                            {turn === 'user' && !isComplete ? (currentPhase === 'PICK' ? 'Your Pick' : 'Your Ban') : 'Waiting...'}
                         </div>
                     </div>
                 </div>
                 
                 <div className="flex flex-col items-center">
-                    <div className="text-lg font-black text-white uppercase tracking-widest">{currentActionText()}</div>
+                    <div className="text-lg font-black text-white uppercase tracking-widest">
+                        {isComplete ? 'VETO COMPLETE' : `${currentPhase} PHASE`}
+                    </div>
                     <div className="flex gap-1 mt-1">
-                        {Array.from({length: 7}).map((_, i) => (
+                        {Array.from({length: 6}).map((_, i) => (
                             <div key={i} className={`w-2 h-2 rounded-full ${i < stepIndex ? 'bg-fm-green' : 'bg-fm-bg border border-fm-border'}`}></div>
                         ))}
                     </div>
                 </div>
 
-                <div className={`flex items-center gap-3 ${turn === 'enemy' && !canComplete ? 'opacity-100' : 'opacity-50'}`}>
+                <div className={`flex items-center gap-3 ${turn === 'enemy' && !isComplete ? 'opacity-100' : 'opacity-50'}`}>
                     <div className="text-right">
                         <div className="text-[10px] text-fm-muted uppercase font-bold">{enemyTeam.name}</div>
-                        <div className={`font-bold text-sm ${turn === 'enemy' && !canComplete ? 'text-fm-red' : 'text-fm-muted'}`}>
-                            {turn === 'enemy' && !canComplete ? (stepIndex === 3 ? 'Enemy Pick' : 'Enemy Ban') : 'Waiting...'}
+                        <div className={`font-bold text-sm ${turn === 'enemy' && !isComplete ? 'text-fm-red' : 'text-fm-muted'}`}>
+                            {turn === 'enemy' && !isComplete ? (currentPhase === 'PICK' ? 'Enemy Pick' : 'Enemy Ban') : 'Waiting...'}
                         </div>
                     </div>
                     <Shield className="text-fm-red" />
@@ -192,16 +208,14 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
                 {MAP_POOL.map(map => {
                     const isBanned = bannedMaps.includes(map.id);
                     const isPicked = pickedMaps.includes(map.id);
-                    const pickIndex = pickedMaps.indexOf(map.id);
-                    const isDecider = pickIndex === 2;
-
+                    
+                    // Logic for display stats
                     const userStat = getStats(userTeam, map.id);
                     const enemyStat = getStats(enemyTeam, map.id);
                     const isUserAdvantage = userStat >= enemyStat;
 
                     // Interaction Logic
-                    const isBanPhase = (stepIndex === 0 || stepIndex === 1 || stepIndex === 4 || stepIndex === 5);
-                    const isInteractive = turn === 'user' && !isBanned && !isPicked && !canComplete;
+                    const isInteractive = turn === 'user' && !isBanned && !isPicked && !isComplete;
 
                     return (
                         <div 
@@ -213,7 +227,7 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
                                 : isPicked 
                                     ? 'border-fm-green scale-105 ring-4 ring-fm-green/20 z-10 shadow-2xl' 
                                     : isInteractive 
-                                        ? `border-fm-border cursor-pointer hover:scale-105 ${isBanPhase ? 'hover:border-fm-red' : 'hover:border-fm-accent'}` 
+                                        ? `border-fm-border cursor-pointer hover:scale-105 ${currentPhase === 'BAN' ? 'hover:border-fm-red' : 'hover:border-fm-accent'}` 
                                         : 'border-fm-border opacity-80'
                             }`}
                         >
@@ -236,8 +250,17 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
                             {isPicked && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-fm-green/20">
                                     <div className="flex flex-col items-center gap-2 text-fm-green font-bold text-lg uppercase tracking-widest animate-pulse">
-                                        {isDecider ? <Shield size={32} /> : <CheckCircle size={32} />}
-                                        {isDecider ? 'Decider' : `Map ${pickIndex + 1}`}
+                                        {bestOf === 1 ? (
+                                            <>
+                                                <Flame size={32} />
+                                                PLAYING
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={32} />
+                                                PICKED
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -263,28 +286,34 @@ export const MapVeto: React.FC<MapVetoProps> = ({ userTeam, enemyTeam, onComplet
                 })}
             </div>
 
-            {canComplete && (
-                <div className="animate-fade-in flex flex-col items-center gap-4">
+            {isComplete && (
+                <div className="animate-fade-in flex flex-col items-center gap-4 fixed bottom-6 z-30 bg-black/80 backdrop-blur p-6 rounded-2xl border border-fm-green/50 shadow-2xl">
                     <div className="text-xl text-fm-muted flex gap-4">
-                        {pickedMaps.map((mid, idx) => (
-                             <span key={idx} className="flex items-center gap-1 font-bold text-white">
-                                 <span className="text-fm-muted text-xs mr-1">{idx+1}.</span> {MAP_POOL.find(m => m.id === mid)?.name}
-                             </span>
-                        ))}
+                        {bestOf === 3 ? (
+                            pickedMaps.map((mid, idx) => (
+                                <span key={idx} className="flex items-center gap-1 font-bold text-white">
+                                    <span className="text-fm-muted text-xs mr-1">{idx+1}.</span> {MAP_POOL.find(m => m.id === mid)?.name}
+                                </span>
+                            ))
+                        ) : (
+                            <span className="flex items-center gap-1 font-bold text-white">
+                                Playing: {MAP_POOL.find(m => m.id === pickedMaps[0])?.name}
+                            </span>
+                        )}
                     </div>
                     <button 
                         onClick={() => onComplete(pickedMaps)}
                         className="px-12 py-4 bg-fm-green hover:bg-fm-green/90 text-white font-black uppercase tracking-widest rounded-xl shadow-lg text-xl flex items-center gap-2 transition-transform hover:scale-105"
                     >
                         <Play size={24} className="fill-current" />
-                        Start Match Series
+                        Start Match {bestOf === 3 ? 'Series' : ''}
                     </button>
                 </div>
             )}
 
             {/* LOGS */}
             {actionLog.length > 0 && (
-                <div className="mt-8 w-full max-w-xl">
+                <div className="mt-8 w-full max-w-xl pb-12">
                     <div className="text-[10px] font-bold text-fm-muted uppercase tracking-widest mb-2 text-center">Veto History</div>
                     <div className="space-y-2 flex flex-col items-center">
                         {actionLog.slice(0, 3).map((log, i) => (

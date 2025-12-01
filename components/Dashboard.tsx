@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Team, ScheduledMatch, Player } from '../types';
 import { PlayerCard } from './PlayerCard';
@@ -95,7 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className="h-full p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
+    <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20">
         
         {/* COLUMN 1: INBOX & REPORT (3 cols) */}
         <div className="lg:col-span-3 flex flex-col gap-6">

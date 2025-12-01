@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { Team, Tactic, OpponentAnalysis, Player } from '../types';
 import { Trophy, Shield, Swords, Play, Brain, Search, Loader2, Crosshair, Lock, Calendar, CheckCircle, TrendingUp, AlertTriangle, Bug } from 'lucide-react';
@@ -121,7 +122,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
   }) : "Upcoming";
 
   return (
-    <div className="h-full flex flex-col max-w-7xl mx-auto p-6 animate-fade-in pb-20">
+    <div className="flex flex-col max-w-7xl mx-auto p-6 animate-fade-in pb-20">
         {/* Match Header */}
         <div className="text-center mb-8 shrink-0 relative">
             <div className="flex items-center justify-center gap-2 mb-2 text-fm-accent font-bold uppercase tracking-widest text-xs bg-fm-accent/10 inline-block px-3 py-1 rounded-full border border-fm-accent/20">
@@ -169,7 +170,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
              
              {/* LEFT: MY TEAM */}
-             <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col">
+             <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col h-[500px]">
                  <div className="p-5 border-b border-fm-border bg-fm-card-hover text-center">
                     <h2 className="text-xl font-black text-white uppercase tracking-tight">{myTeam.name}</h2>
                     <div className="text-fm-accent font-bold text-[10px] uppercase tracking-widest mt-1">Rank #{myTeam.rankingPoints}</div>
@@ -212,7 +213,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
                 </div>
 
                 {/* ANALYSIS CARD */}
-                <div className="bg-fm-card border border-fm-border rounded-xl p-6 flex-1 flex flex-col shadow-lg">
+                <div className="bg-fm-card border border-fm-border rounded-xl p-6 flex-1 flex flex-col shadow-lg min-h-[300px]">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <h3 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wide">
@@ -328,7 +329,7 @@ export const MatchLobby: React.FC<MatchLobbyProps> = ({
              </div>
 
              {/* RIGHT: ENEMY TEAM */}
-             <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col">
+             <div className="lg:col-span-3 bg-fm-card border border-fm-border rounded-xl p-0 overflow-hidden shadow-lg flex flex-col h-[500px]">
                  <div className="p-5 border-b border-fm-border bg-fm-card-hover text-center">
                     <h2 className="text-xl font-black text-fm-red uppercase tracking-tight">
                         {isTBD ? 'Awaiting...' : opponent.name}
