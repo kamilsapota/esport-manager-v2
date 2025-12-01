@@ -1031,7 +1031,7 @@ export default function App() {
 
       setMyTeam(prev => {
           const mapStats = { ...prev.mapStats };
-          const practiceStats = { ...prev.practiceStats } || {};
+          const practiceStats = { ...(prev.practiceStats || {}) };
           
           if (!practiceStats[mapId]) practiceStats[mapId] = { pistol: 0, ct: 0, t: 0, strat: 0 };
           const currentMapPractice = { ...practiceStats[mapId] };
@@ -1167,7 +1167,7 @@ export default function App() {
                  />
               )}
               {view === GameView.MATCH_LOBBY && (
-                  (nextOpponent || nextScheduledMatch || (nextOpponent && nextOpponent!.id === 'temp-id')) ? (
+                  ((nextOpponent && nextOpponent.id !== 'temp-id') || nextScheduledMatch || (nextOpponent && nextOpponent.id === 'temp-id')) ? (
                       <MatchLobby 
                         myTeam={myTeam}
                         opponent={nextOpponent || EMPTY_TEAM}
