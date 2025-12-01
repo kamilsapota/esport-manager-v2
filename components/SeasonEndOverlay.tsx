@@ -61,7 +61,7 @@ export const SeasonEndOverlay: React.FC<SeasonEndOverlayProps> = ({ rank, isPlay
             
             {/* Background Flair */}
             <div className={`absolute inset-0 transition-opacity duration-1000 ${step >= 1 ? 'opacity-100' : 'opacity-0'}`}>
-                <div className={`absolute top-0 left-0 w-full h-1/2 blur-[150px] ${isChampion ? 'bg-fm-green/20' : (isPlayoffQualified && !isEliminatedInPlayoffs) ? 'bg-fm-accent/20' : 'bg-gray-500/10'}`}></div>
+                <div className={`absolute top-0 left-0 w-full h-1/2 blur-[150px] ${isChampion ? 'bg-fm-green/20' : (!isEliminatedInPlayoffs) ? 'bg-fm-accent/20' : 'bg-gray-500/10'}`}></div>
             </div>
 
             <div className="relative z-10 text-center max-w-2xl px-6">
@@ -78,7 +78,7 @@ export const SeasonEndOverlay: React.FC<SeasonEndOverlayProps> = ({ rank, isPlay
                     <div className="flex flex-col items-center justify-center mb-8">
                         <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full flex items-center justify-center border-4 shadow-[0_0_60px_rgba(255,255,255,0.1)] mb-4 ${
                              isChampion ? 'bg-fm-green border-white text-white shadow-fm-green/50' :
-                             (isPlayoffQualified && !isEliminatedInPlayoffs) ? 'bg-fm-accent border-white text-white shadow-fm-accent/50' : 
+                             (!isEliminatedInPlayoffs && isPlayoffQualified) ? 'bg-fm-accent border-white text-white shadow-fm-accent/50' : 
                              'bg-fm-card border-fm-border text-fm-muted'
                         }`}>
                             <div className="flex flex-col items-center leading-none">

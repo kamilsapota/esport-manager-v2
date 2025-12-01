@@ -288,12 +288,10 @@ export default function App() {
            const leagues = Object.values(League);
            const currentIdx = leagues.indexOf(myTeam.league);
            if (currentIdx < leagues.length - 1) {
-                newLeague = leagues[currentIdx + 1];
-                // In a full app, we would load new teams. For now, we simulate harder opponents.
-                // If we have data for the next league, use it.
-                if (TEAMS_BY_LEAGUE[newLeague]) {
-                    newOpponents = TEAMS_BY_LEAGUE[newLeague];
-                }
+                const nextLeague = leagues[currentIdx + 1];
+                // TS Fix: No need to check TEAMS_BY_LEAGUE[nextLeague] as it is exhaustive for League enum
+                newLeague = nextLeague;
+                newOpponents = TEAMS_BY_LEAGUE[newLeague];
            }
       }
       
@@ -520,9 +518,9 @@ export default function App() {
               
               if (bracketIdx !== -1) {
                   const currentMatch = playoffBracket[bracketIdx];
-                  if (!currentMatch) return; // TS Guard
+                  if (!currentMatch) return;
 
-                  // Explicitly type teams to avoid 'never' inference errors
+                  // Explicitly type to avoid TS 'never' inference
                   const tA = currentMatch.teamA as Team;
                   const tB = currentMatch.teamB as Team;
 
@@ -543,14 +541,7 @@ export default function App() {
                       if (nextMatchId) {
                           const nextMatchIdx = updatedBracket.findIndex(m => m.id === nextMatchId);
                           if (nextMatchIdx !== -1) {
-                              // Slot winner into next match
                               const nextMatch = updatedBracket[nextMatchIdx];
-                              // Basic logic to fill A or B slot
-                              const isSlotA = ['qf-1', 'qf-2', 'sf-1'].includes(currentMatchId); // Simplified logic
-                              // Actually, QF1(1v8) & QF2(4v5) go to SF1. QF3(3v6) & QF4(2v7) go to SF2.
-                              // Wait, bracket logic needs to be robust. 
-                              // SF1 is winner of QF1 vs QF2.
-                              // SF2 is winner of QF3 vs QF4.
                               
                               if (currentMatchId === 'qf-1') updatedBracket[nextMatchIdx].teamA = myTeam;
                               if (currentMatchId === 'qf-2') updatedBracket[nextMatchIdx].teamB = myTeam;
@@ -564,8 +555,6 @@ export default function App() {
                               const nextDate = new Date(currentMatch.date);
                               nextDate.setDate(nextDate.getDate() + 2);
                               
-                              // We need to wait for the OTHER opponent. 
-                              // For now, assume TBD. We will update schedule when scanning daily.
                               setSchedule([{
                                   id: nextMatchId,
                                   date: nextDate.toISOString(),
@@ -584,11 +573,11 @@ export default function App() {
                       }
                   } else {
                       // ELIMINATED FROM PLAYOFFS
-                      // Calculate Rank based on round
+                      // Calculate specific rank based on round
                       let finalRank = 0;
                       if (currentMatch.round === 'QF') finalRank = 5; // Top 8 (5th-8th)
-                      if (currentMatch.round === 'SF') finalRank = 3; // Top 4 (3rd-4th)
-                      if (currentMatch.round === 'F') finalRank = 2; // Runner up
+                      else if (currentMatch.round === 'SF') finalRank = 3; // Top 4 (3rd-4th)
+                      else if (currentMatch.round === 'F') finalRank = 2; // Runner Up
                       
                       setLeagueRank(finalRank);
                       setShowSeasonEnd(true);
@@ -607,7 +596,6 @@ export default function App() {
                   scoreEnemy: newSeriesScoreEnemy
               });
               
-              // Start Next Map immediately or show lobby? Let's transition immediately for flow
               setLiveMatchData({
                   enemy: nextOpponent!,
                   mapId: nextMap,
@@ -695,10 +683,10 @@ export default function App() {
       {showSeasonEnd && (
           <SeasonEndOverlay 
             rank={leagueRank} 
-            isPlayoffQualified={leagueRank <= 8} 
+            isPlayoffQualified={leagueRank <= 8 && seasonPhase === 'REGULAR'} 
             isPromotion={isPromotion}
             seasonPhase={seasonPhase}
-            onContinue={startNewSeason} // Reuse startNewSeason to progress or start off-season logic
+            onContinue={startNewSeason} 
             leagueName={myTeam.league}
           />
       )}
