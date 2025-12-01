@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Team, Player, PlayerRole, League, LeagueRoundResult, OpponentAnalysis, ScheduledMatch, MapPracticeStats, Tactic, TrainingIntensity, DRILLS, DrillType, Coach, AutomationConfig, Tournament, GameView, MatchResult, SeasonPhase, PlayoffMatch, PlayerMatchStats, SeriesState, DailyGain } from './types';
 import { Header } from './components/Header';
@@ -739,8 +738,9 @@ export default function App() {
           const leagues = Object.values(League);
           const currentIdx = leagues.indexOf(myTeam.league);
           if (currentIdx !== -1 && currentIdx < leagues.length - 1) {
-              const nextLeague = leagues[currentIdx + 1];
-              newOpponents = TEAMS_BY_LEAGUE[nextLeague as League]?.slice(0, 19) || []; 
+              const nextLeague = leagues[currentIdx + 1] as League;
+              // Direct access since TEAMS_BY_LEAGUE is exhaustive
+              newOpponents = TEAMS_BY_LEAGUE[nextLeague].slice(0, 19); 
           }
       } else {
            newOpponents = leagueOpponents.map(t => resetStats(t));
@@ -847,7 +847,7 @@ export default function App() {
                           setShowSeasonEndOverlay(true);
                       } else {
                           // Schedule Next match for User
-                          const nextM = updatedBracket.find(m => !m.isPlayed && (m.teamA.id === myTeam.id || m.teamB.id === myTeam.id));
+                          const nextM: PlayoffMatch | undefined = updatedBracket.find(m => !m.isPlayed && (m.teamA.id === myTeam.id || m.teamB.id === myTeam.id));
                           if (nextM) {
                                // Next match ready
                                const nextDate = new Date(currentDate);
