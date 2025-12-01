@@ -464,7 +464,7 @@ export default function App() {
           setLiveMatchData({
               enemy: nextOpponent,
               mapId: randomMap,
-              context: seasonPhase === 'PLAYOFFS' ? 'Playoff Match' : 'League Match',
+              context: 'League Match',
               fatiguePenalty: 0,
               analysisActive: !!analysis
           });
